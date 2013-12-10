@@ -53,8 +53,17 @@ to do
 
 There is a lot to do on the server side still, making it safe, printing error messages, closing connections and better engineering stuff.
 
-- Quiting/Game Over  
-- Terminal client code  
-- Server handling Multiple Games  
-- Credentials handling/Logging in  
-- Browser client/Gui client
+__Server__
+- [ ] Game Begin Interaction  
+- [x] Game Over Interaction  
+- [ ] Quiting  
+- [ ] Handling Multiple Games  
+- [ ] Handling variable numbers of clients  
+- [ ] Database for Credentials/ High scores tracking
+
+__Client__
+- [ ] Client Nertz Code
+- [ ] Terminal display code (a nice implementation might resemble a [progress bar](http://www.darkcoding.net/software/pretty-command-line-console-output-on-unix-in-python-and-go-lang/ "A nice example of a GoLang progress bar")  
+- [ ] Credentials handling/Logging in  
+- [ ] Browser client which contacts Server
+- [ ] Browser display/Gui display  
