@@ -11,12 +11,6 @@ type Card struct{
     Player string
 }
 
-/* Client :: httpreq <- move
-   Server :: if Valid(move) => Arena.Moves <- move && httpresp <- true
-             else httpresp <- false
-             continue listening for requests
-*/
-
 /* Server-side code */
 
 type Move struct{
@@ -24,19 +18,16 @@ type Move struct{
     Pile int
 }
 
-type Response struct {
-    Ok bool
-}
-
 type Game struct {
     Clients []*Client
     Arenas chan *Arena
     Updates chan *Arena
-    Messages chan string
     NewClients chan *Client
-    Quiters chan *Client
+    ScoreChan chan map[string]int
     GameOver chan int
+    Started bool
     Done int
+    Scoreboard map[string]int
 }
 
 func NewGame() {
@@ -44,11 +35,11 @@ func NewGame() {
     game.Clients    = make([]*Client, 0, 6)
     game.Arenas     = make(chan *Arena)
     game.Updates    = make(chan *Arena, 10)
-    game.Messages   = make(chan string, 10)
     game.NewClients = make(chan *Client, 6)
-    game.Quiters    = make(chan *Client, 6)
-    game.GameOver   = make(chan int)
-    game.Done       = false
+    game.ScoreChan  = make(chan map[string]int, 6)
+    game.GameOver   = make(chan int, 6)
+    game.Started    = false
+    game.Done       = 0
     return game
 }
 
@@ -64,7 +55,6 @@ type Client struct {
     Conn *websocket.Conn
     Arenas chan *Arena
     Messages chan string
-    GameOver chan int
     Name string
 }
 
@@ -79,12 +69,11 @@ func (g *Game) NewClient(ws *websocket.Conn) *Client {
     client.Conn = ws
     client.Arenas = make(chan *Arena)
     client.Messages = make(chan string)
-    client.GameOver = make(chan int)
     g.NewClients <- client
     return client
 }
 
-func (g *Game) TallyUp() map[string]int {
+func (g *Game) TallyUp() {
     a := <-g.Arenas
     var scores map[string]int
     for _, pile := range a.Piles {
@@ -92,25 +81,22 @@ func (g *Game) TallyUp() map[string]int {
             scores[card.Player]++
         }
     }
-    return scores
+    g.Scoreboard = scores
 }
 
 func (g *Game) BroadcastMessages() {
-    for {
+    for ! g.Done {
         select {
-        case msg := <-g.Messages:
-            for _, c := range g.Clients {
-                c.Messages <- msg
-            }
         case arena := <-g.Updates:
             for _, c := range g.Clients {
                 c.Arenas <- arena
             }
         case <-g.GameOver:
             g.Done = true
-            scores := g.TallyUp()
+            g.TallyUp()
+            close(g.Arenas)
             for _, c := range g.Clients {
-                c.GameOver <- scores[c.Name]
+                close(c.Arenas)
             }
         }
     }
