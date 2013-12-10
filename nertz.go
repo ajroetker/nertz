@@ -34,13 +34,14 @@ type Game struct {
 func NewGame() *Game {
     var game *Game  = new(Game)
     game.Clients    = make([]*Client, 0, 6)
-    game.Arenas     = make(chan *Arena)
+    game.Arenas     = make(chan *Arena, 1)
     game.Updates    = make(chan *Arena, 10)
     game.NewClients = make(chan *Client, 6)
     game.ScoreChan  = make(chan map[string]interface{}, 6)
     game.GameOver   = make(chan int, 6)
     game.Started    = false
     game.Done       = 0
+    game.Arenas <- &Arena{ make([]*Pile, 0, 24), }
     return game
 }
 

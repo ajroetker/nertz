@@ -68,10 +68,7 @@ func main() {
     }
     listenAt := fmt.Sprintf(":%v", port)
 
-    arena := new(nertz.Arena)
-    arena.Piles = make([]*nertz.Pile, 0, 24)
     game := nertz.NewGame()
-    game.Arenas <- arena
     go game.BroadcastMessages()
     go game.WriteScores()
 
