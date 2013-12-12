@@ -252,6 +252,12 @@ func NewShuffledDeck(player string) []*Card {
     return deck
 }
 
+type Hand struct {
+    Nertzpile *list.List
+    Streampile *list.List
+    Lake []*list.List
+}
+
 func NewHand() *Hand {
     var hand *Hand = new(Hand)
     cards := NewShuffledDeck(player string)
@@ -276,20 +282,8 @@ func NewHand() *Hand {
     return hand
 }
 
-type Hand struct {
-    Nertzpile *list.List
-    Streampile *list.List
-    Lake []*list.List
-}
-
 func (h *Hand) IsNertz() bool {
     return h.Nertzpile.Len() == 0
-}
-
-type PlayerMove struct {
-    From map[string]interface{}
-    To map[string]interface{}
-    Cards *list.List
 }
 
 func (h *Hand) TakeFrom( pile string, numcards int ) *list.List {
@@ -349,94 +343,3 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
     }
 }
 
-func (p *Player) Valid(pm *PlayerMove) bool {
-
-    num, ok := m.To["Number"]
-    pile, err := strconv.Atoi(num)
-    if !ok || err != nil {
-        fmt.Println("Move did not contain a pile number or was not an integer")
-        return false
-    }
-    switch m.To["Pile"] {
-    case "Arena":
-        if m.Cards.Len() != 1 {
-            fmt.Println("Cannot send multiple cards to River")
-            h.UndoMove(m)
-        } else {
-            //send request to server checking move!
-            card := m.Cards.Front().Value
-            jsonBytes, err := json.Marshal(Move{ card, pile })
-            buf := bytes.NewBuffer(jsonBytes)
-            resp, err := http.POST(p.GameURL + "/move", "application/json", buf)
-            //err handling
-            defer resp.Close()
-
-            data := make(map[string]bool)
-            dec := json.NewDecoder(resp.Body)
-            dec.Decode(&data)
-
-            if ! data["Ok"] {
-                fmt.Println("Not a valid move")
-                h.UndoMove(m)
-            }
-        }
-    case "Lake":
-
-    }
-}
-
-func (p *Player) MakeMoves() {
-    legalTo := map[string]bool{
-        "Lake"  : true,
-        "Arena" : true,
-    }
-    legalFrom := map[string]bool{
-        "Lake"       : true,
-        "Streampile" : true,
-        "Nertzpile"  : true,
-    }
-    for m := range p.Moves {
-        if ! legalFrom[m.From] || m.Cards.Len() == 0 {
-            fmt.Println("Don't know what you just did weirdo!")
-            break
-        }
-        if ! legalTo[m.To] {
-            fmt.Println("Not a valid move")
-            h.UndoMove(m)
-        }
-
-        num, ok := m.To["Number"]
-        pile, err := strconv.Atoi(num)
-        if !ok || err != nil {
-            fmt.Println("Move did not contain a pile number or was not an integer")
-            h.UndoMove(m)
-        }
-        switch m.To["Pile"] {
-        case "Arena":
-            if m.Cards.Len() != 1 {
-                fmt.Println("Cannot send multiple cards to River")
-                h.UndoMove(m)
-            } else {
-                //send request to server checking move!
-                card := m.Cards.Front().Value
-                jsonBytes, err := json.Marshal(Move{ card, pile })
-                buf := bytes.NewBuffer(jsonBytes)
-                resp, err := http.POST(p.GameURL + "/move", "application/json", buf)
-                //err handling
-                defer resp.Close()
-
-                data := make(map[string]bool)
-                dec := json.NewDecoder(resp.Body)
-                dec.Decode(&data)
-
-                if ! data["Ok"] {
-                    fmt.Println("Not a valid move")
-                    h.UndoMove(m)
-                }
-            }
-        case "Lake":
-            
-        }
-
-    }
-}
