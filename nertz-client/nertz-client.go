@@ -75,6 +75,8 @@ func main() {
     }
     defer ws.Close()
 
+    player := NewPlayer(url, ws)
+
     fmt.Fprintf(os.Stdout, "Client connected to %v:%v...\n", host, port)
 
     ch := make(chan string, 50)

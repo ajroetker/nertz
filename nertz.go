@@ -6,6 +6,7 @@ import (
     "net/http"
     "errors"
     "log"
+    "math/rand"
     websocket "code.google.com/p/go.net/websocket"
 )
 
@@ -214,6 +215,7 @@ func (s *Game) MakeMove(move *Move) bool {
 /* Client-side code */
 
 type Player struct {
+    Name string
     Hand *Hand
     Conn *websocket.Conn
     GameURL string
@@ -222,9 +224,11 @@ type Player struct {
     Moves chan *PlayerMove
 }
 
-func NewPlayer(url string) *Player {
+func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
     var player *Player = new(Player)
-    player.Conn = 
+    player.Hand = NewHand()
+    player.Conn = ws
+    player.Name = name
     player.GameURL = url
     player.Arenas = make(chan *Arena, 10)
     player.Messages = make(chan string, 10)
@@ -232,14 +236,43 @@ func NewPlayer(url string) *Player {
     return player
 }
 
+func NewShuffledDeck(player string) []*Card {
+    deck := make([]*Card, 52)
+    for i := 1; i <= 4; i++ {
+        for j := 1; j<= 13; j++ {
+            deck[i*j] = &Card{ j, i, player, }
+        }
+    }
+    for i := 51; i > 0; i-- {
+        j   := rand.Intn(i+1)
+        tmp := deck[i]
+        deck[i] = deck[j]
+        deck[j] = tmp
+    }
+    return deck
+}
+
 func NewHand() *Hand {
     var hand *Hand = new(Hand)
+    cards := NewShuffledDeck(player string)
+    i := 0
     hand.Nertzpile = list.New()
-    hand.Streampile = list.New()
+    for ; i < 13 ; i++ {
+        hand.Nertzpile.PushFront(cards[i])
+    }
+
     hand.Lake = make([]*list.List, 4)
     for pile := range hand.Lake {
         hand.Lake[pile] = list.New()
+        hand.Lake[pile].PushFront(cards[i])
+        i++
     }
+
+    hand.Streampile = list.New()
+    for ; i < len(cards) ; i++ {
+        hand.Nertzpile.PushFront(cards[i])
+    }
+
     return hand
 }
 
@@ -266,6 +299,7 @@ func (h *Hand) TakeFrom( pile string, numcards int ) *list.List {
     cards := list.New()
     switch pile {
     case "Nertzpile":
+
     case "Streampile":
     case "Lake":
     default:
@@ -273,7 +307,7 @@ func (h *Hand) TakeFrom( pile string, numcards int ) *list.List {
     }
 }
 
-func (h *Hand) GiveTo( pile string, num int, cards *list.List ) error {
+func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
     switch pile {
     case "Arena":
         if cards.Len() != 1 {
@@ -296,15 +330,15 @@ func (h *Hand) GiveTo( pile string, num int, cards *list.List ) error {
             }
         }
     case "Lake":
-        if h.Lake[num].Len() == 0 {
-            h.Lake[num].PushFrontList(cards)
+        if h.Lake[pilenum].Len() == 0 {
+            h.Lake[pilenum].PushFrontList(cards)
             return
         }
 
         backcard := cards.Back().Value
-        frontcard := h.Lake[num].Front().Value
+        frontcard := h.Lake[pilenum].Front().Value
         if frontcard.Value == backcard.Value + 1 && frontcard.Suit % backcard.Suit != 0 {
-            h.Lake[num].PushFrontList(cards)
+            h.Lake[pilenum].PushFrontList(cards)
             return
         }
 
@@ -313,9 +347,6 @@ func (h *Hand) GiveTo( pile string, num int, cards *list.List ) error {
     default:
         return errors.New("Cannot move there")
     }
-}
-
-func (h *Hand) UndoMove(m *PlayerMove) error {
 }
 
 func (p *Player) Valid(pm *PlayerMove) bool {
