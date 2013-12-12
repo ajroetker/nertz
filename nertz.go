@@ -256,6 +256,7 @@ type Hand struct {
     Nertzpile *list.List
     Streampile *list.List
     Lake []*list.List
+    Stream *list.List
 }
 
 func NewHand() *Hand {
@@ -279,6 +280,8 @@ func NewHand() *Hand {
         hand.Nertzpile.PushFront(cards[i])
     }
 
+    hand.Stream = list.New()
+
     return hand
 }
 
@@ -286,19 +289,30 @@ func (h *Hand) IsNertz() bool {
     return h.Nertzpile.Len() == 0
 }
 
-func (h *Hand) TakeFrom( pile string, numcards int ) *list.List {
+func (h *Hand) TakeFrom( pile string, pilenum int, numcards int ) *list.List {
     if  cards == 0 {
         return errors.New("Not a valid move")
     }
     cards := list.New()
     switch pile {
     case "Nertzpile":
-
+        cards.PushFront(h.Nertzpile.Front().Value)
     case "Streampile":
+        for i := 0 ; i < numcards ; i++ {
+            cards.PushFront(h.Streampile.Front().Value)
+        }
+    case "Stream":
+        for i := 0 ; i < numcards ; i++ {
+            cards.PushFront(h.Streampile.Front().Value)
+        }
     case "Lake":
+        for i := 0 ; i < numcards ; i++ {
+            cards.PushBack(h.Lake[pilenum].Front().Value)
+        }
     default:
         return errors.New("Cannot take from there")
     }
+    return cards
 }
 
 func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
@@ -338,6 +352,16 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
 
         return errors.New("Not a valid move")
 
+    case "Stream":
+        h.Stream.PushFrontList(cards)
+    case "Streampile":
+        if h.Streampile.Len() == 0 {
+            // expecting to get the stream back here
+            h.Stream.PushFrontList(cards)
+            return
+        } else {
+            return errors.New("Streampile hasn't run out... something went wrong")
+        }
     default:
         return errors.New("Cannot move there")
     }
