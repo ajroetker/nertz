@@ -5,10 +5,9 @@ The rules for [nertz](http://en.wikipedia.org/wiki/Nertz "Link to Wikipedia Desc
 
 This repository is a Go implementation of nertz using websockets for client connections. All data is communicated with JSON over the socket is in JSON and the `/move` HTTP POST requests so there is no reason the client of the server couldn't be rewritten in another language.
 
-current picture
-===============
+###current picture
 
-#Server  
+####Server  
 - `nertz-server` takes a `<port>` to start the service on  
 - accepts websocket connections at `:<port>/` until the game has started (at most 6 players)  
     * asks for client credentials, sending JSON `{"Message" : "Credentials"}`  
@@ -59,8 +58,7 @@ type Hand struct {
     * Send the users the scoreboard which will be a JSON encoded `map[string]int`
     * Close the websocket connections
 
-to do
-=====
+###to do
 
 There is a lot to do on the server side still, making it safe, printing error messages, closing connections and better engineering stuff.
 
