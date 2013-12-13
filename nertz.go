@@ -25,8 +25,8 @@ type Move struct{
 
 type Game struct {
     Clients []*Client
-    Arenas chan *Arena
-    Updates chan *Arena
+    Lakes chan *Lake
+    Updates chan *Lake
     NewClients chan *Client
     ScoreChan chan map[string]interface{}
     GameOver chan int
@@ -38,14 +38,14 @@ type Game struct {
 func NewGame() *Game {
     var game *Game  = new(Game)
     game.Clients    = make([]*Client, 0, 6)
-    game.Arenas     = make(chan *Arena, 1)
-    game.Updates    = make(chan *Arena, 10)
+    game.Lakes     = make(chan *Lake, 1)
+    game.Updates    = make(chan *Lake, 10)
     game.NewClients = make(chan *Client, 6)
     game.ScoreChan  = make(chan map[string]interface{}, 6)
     game.GameOver   = make(chan int, 6)
     game.Started    = false
     game.Done       = 0
-    game.Arenas <- &Arena{ make([]*Pile, 0, 24), }
+    game.Lakes <- &Lake{ make([]*Pile, 0, 24), }
     return game
 }
 
@@ -53,13 +53,13 @@ type Pile struct {
     Cards []*Card
 }
 
-type Arena struct {
+type Lake struct {
     Piles []*Pile
 }
 
 type Client struct {
     Conn *websocket.Conn
-    Arenas chan *Arena
+    Lakes chan *Lake
     Messages chan string
     Name string
 }
@@ -73,14 +73,14 @@ func (g *Game) AddNewClients() {
 func (g *Game) NewClient(ws *websocket.Conn) *Client {
     var client *Client = new(Client)
     client.Conn = ws
-    client.Arenas = make(chan *Arena, 10)
+    client.Lakes = make(chan *Lake, 10)
     client.Messages = make(chan string, 10)
     g.NewClients <- client
     return client
 }
 
 func (g *Game) TallyUp() {
-    a := <-g.Arenas
+    a := <-g.Lakes
     var scores map[string]int
     for _, pile := range a.Piles {
         for _, card := range pile.Cards {
@@ -93,15 +93,15 @@ func (g *Game) TallyUp() {
 func (g *Game) BroadcastMessages() {
     for {
         select {
-        case arena := <-g.Updates:
+        case lake := <-g.Updates:
             for _, c := range g.Clients {
-                c.Arenas <- arena
+                c.Lakes <- lake
             }
         case <-g.GameOver:
             g.TallyUp()
-            close(g.Arenas)
+            close(g.Lakes)
             for _, c := range g.Clients {
-                close(c.Arenas)
+                close(c.Lakes)
             }
             return
         }
@@ -165,9 +165,9 @@ func (c *Client) SendMessages() {
         case msg := <-c.Messages:
             jsonMsg := map[string]string{ "Message" : msg }
             err = websocket.JSON.Send(c.Conn, jsonMsg)
-        case arena, ok := <-c.Arenas:
+        case lake, ok := <-c.Lakes:
             if ok {
-                err =  websocket.JSON.Send(c.Conn, arena)
+                err =  websocket.JSON.Send(c.Conn, lake)
             } else {
                 //if the channel is closed it means the game is over!
                 jsonMsg := map[string]string{ "Message" : "Nertz" }
@@ -205,7 +205,7 @@ func (c *Client) GetCredentials() *Credentials {
 }
 
 func (s *Game) MakeMove(move *Move) bool {
-    a := <-s.Arenas
+    a := <-s.Lakes
     size := len(a.Piles[move.Pile].Cards)
     var resp bool
     if size == 0 && move.Card.Value == 1 {
@@ -221,7 +221,7 @@ func (s *Game) MakeMove(move *Move) bool {
             resp = true
         }
     }
-    s.Arenas <- a
+    s.Lakes <- a
     s.Updates <- a
     return resp
 }
@@ -233,9 +233,9 @@ type Player struct {
     Hand *Hand
     Conn *websocket.Conn
     GameURL string
-    Arenas chan *Arena
+    Lakes chan *Lake
     Messages chan string
-    Arena *Arena
+    Lake *Lake
 }
 
 func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
@@ -244,7 +244,7 @@ func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
     player.Conn = ws
     player.Name = name
     player.GameURL = url
-    player.Arenas = make(chan *Arena, 10)
+    player.Lakes = make(chan *Lake, 10)
     player.Messages = make(chan string, 10)
     return player
 }
@@ -268,18 +268,18 @@ func NewShuffledDeck(player string) []*Card {
 type Hand struct {
     Nertzpile *list.List
     Streampile *list.List
-    Lake []*list.List
+    River []*list.List
     Stream *list.List
 }
 
-Transaction("Nertzpile", _, "Arena", _, 1)
+Transaction("Nertzpile", _, "Lake", _, 1)
 
 func (h *Hand) Transaction(from string, fpilenum int, to string, tpilenum int, numcards int) error {
     legalFromTos := map[string][]string{
-        "Nertzpile" : []string{ "Lake", "Arena" },
-        "Lake" : []string{ "Lake", "Arena" },
+        "Nertzpile" : []string{ "River", "Lake" },
+        "River" : []string{ "River", "Lake" },
         "Streampile" : []string{ "Stream" },
-        "Stream" : []string{ "Lake", "Arena", "Streampile" },
+        "Stream" : []string{ "River", "Lake", "Streampile" },
     }
     legalTos := legalsFromTos[from]
     return errors.New("Not a legal move brah!")
@@ -308,10 +308,10 @@ func NewHand(player string) *Hand {
         hand.Nertzpile.PushFront(cards[i])
     }
 
-    hand.Lake = make([]*list.List, 4)
-    for pile := range hand.Lake {
-        hand.Lake[pile] = list.New()
-        hand.Lake[pile].PushFront(cards[i])
+    hand.River = make([]*list.List, 4)
+    for pile := range hand.River {
+        hand.River[pile] = list.New()
+        hand.River[pile].PushFront(cards[i])
         i++
     }
 
@@ -345,9 +345,9 @@ func (h *Hand) TakeFrom( pile string, pilenum int, numcards int ) *list.List {
         for i := 0 ; i < numcards ; i++ {
             cards.PushFront(h.Streampile.Front().Value)
         }
-    case "Lake":
+    case "River":
         for i := 0 ; i < numcards ; i++ {
-            cards.PushBack(h.Lake[pilenum].Front().Value)
+            cards.PushBack(h.River[pilenum].Front().Value)
         }
     default:
         return errors.New("Cannot take from there")
@@ -357,7 +357,7 @@ func (h *Hand) TakeFrom( pile string, pilenum int, numcards int ) *list.List {
 
 func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
     switch pile {
-    case "Arena":
+    case "Lake":
         if cards.Len() != 1 {
             return errors.New("Cannot send multiple cards to River")
         } else {
@@ -377,16 +377,16 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
                 return errors.New("Not a valid move or you were too slow!")
             }
         }
-    case "Lake":
-        if h.Lake[pilenum].Len() == 0 {
-            h.Lake[pilenum].PushFrontList(cards)
+    case "River":
+        if h.River[pilenum].Len() == 0 {
+            h.River[pilenum].PushFrontList(cards)
             return
         }
 
         backcard := cards.Back().Value
-        frontcard := h.Lake[pilenum].Front().Value
+        frontcard := h.River[pilenum].Front().Value
         if frontcard.Value == backcard.Value + 1 && frontcard.Suit % backcard.Suit != 0 {
-            h.Lake[pilenum].PushFrontList(cards)
+            h.River[pilenum].PushFrontList(cards)
             return
         }
 
