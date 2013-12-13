@@ -8,6 +8,7 @@ import (
     "strconv"
     "bufio"
     "strings"
+    "nertz"
 )
 
 func credentials() (string, string) {
@@ -20,6 +21,25 @@ func credentials() (string, string) {
     password, _ := reader.ReadString('\n')
 
     return strings.TrimSpace(username), strings.TrimSpace(password) // ReadString() leaves a trailing newline character
+}
+
+func PrintCardStack(cs *list.List, toShow int) {
+    stack := "[%v"
+    for e := cs.Front() ; e != nil ; e = e.Next() {
+        if toShow > 0 {
+            card := fmt.Sprintf("%v%v]%%v", e.Value.Value, e.Value.Suit))     
+            stack = fmt.Sprintf(stack, card)
+            toShow--
+        } else {
+            stack = fmt.Sprintf(stack, "]%v")
+        }   
+    }
+    stack = fmt.Sprintf(stack, "")
+    if stack == "[" {
+       fmt.Println("empty stack")
+    } else {
+        fmt.Println(stack)
+    }
 }
 
 func reader(ws *websocket.Conn, ch chan string) {
