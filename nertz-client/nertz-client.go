@@ -10,22 +10,6 @@ import (
     "strings"
 )
 
-type Move struct{
-    card Card
-    pile int
-}
-
-type Card struct{
-    value int
-    player string
-}
-
-type Arena struct {
-    piles []Card
-    moves chan Move
-}
-
-
 func credentials() (string, string) {
     reader := bufio.NewReader(os.Stdin)
 
@@ -64,22 +48,19 @@ func main() {
     }
 
     origin := "http://localhost/"
-    url := fmt.Sprintf("ws://%v:%v/ws", host, port)
+    wsurl := fmt.Sprintf("ws://%v:%v/ws", host, port)
+    gameurl := fmt.Sprintf("http://%v:%v/move", host, port)
 
-    println(url)
-
-
-    ws, err := websocket.Dial(url, "", origin)
+    ws, err := websocket.Dial(wsurl, "", origin)
     if err != nil {
         log.Fatal(err)
     }
     defer ws.Close()
 
-    player := NewPlayer(url, ws)
+    name, _ := credentials()
+    player :=  NewPlayer(name, gameurl, ws) *Player {
 
     fmt.Fprintf(os.Stdout, "Client connected to %v:%v...\n", host, port)
-
-    ch := make(chan string, 50)
 
     go reader(ws, ch)
     for {

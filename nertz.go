@@ -180,6 +180,20 @@ func (c *Client) SendMessages() {
     }
 }
 
+func (p *Player) RecieveMessages() {
+    ok := true
+    var err error
+    for ok {
+        var msg interface{}
+        err := websocket.JSON.Receive(p.Conn, &msg)
+        if err != nil {
+            panic("JSON.Recieve: " + err.Error())
+        }
+        switch msg.(type) {
+        }
+    }
+}
+
 func (c *Client) GetCredentials() *Credentials {
     c.Messages <- "Credentials"
     var creds Credentials
@@ -221,18 +235,17 @@ type Player struct {
     GameURL string
     Arenas chan *Arena
     Messages chan string
-    Moves chan *PlayerMove
+    Arena *Arena
 }
 
 func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
     var player *Player = new(Player)
-    player.Hand = NewHand()
+    player.Hand = NewHand(name)
     player.Conn = ws
     player.Name = name
     player.GameURL = url
     player.Arenas = make(chan *Arena, 10)
     player.Messages = make(chan string, 10)
-    player.Moves = make(chan string, 10)
     return player
 }
 
@@ -259,9 +272,36 @@ type Hand struct {
     Stream *list.List
 }
 
-func NewHand() *Hand {
+Transaction("Nertzpile", _, "Arena", _, 1)
+
+func (h *Hand) Transaction(from string, fpilenum int, to string, tpilenum int, numcards int) error {
+    legalFromTos := map[string][]string{
+        "Nertzpile" : []string{ "Lake", "Arena" },
+        "Lake" : []string{ "Lake", "Arena" },
+        "Streampile" : []string{ "Stream" },
+        "Stream" : []string{ "Lake", "Arena", "Streampile" },
+    }
+    legalTos := legalsFromTos[from]
+    return errors.New("Not a legal move brah!")
+    for _, v := range legalTos {
+        if v == to {
+            cards := h.TakeFrom( from, fpilenum, numcards )
+            err := h.GiveTo( to, tpilenum, cards )
+            if err != nil {
+                return err
+            } else {
+                h.Commit( from, fpilenum, numcards )
+                return
+            }
+        }
+    }
+    return errors.New("Not a legal move brah!")
+}
+
+
+func NewHand(player string) *Hand {
     var hand *Hand = new(Hand)
-    cards := NewShuffledDeck(player string)
+    cards := NewShuffledDeck(player)
     i := 0
     hand.Nertzpile = list.New()
     for ; i < 13 ; i++ {
@@ -325,7 +365,7 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
             card := cards.Front().Value
             jsonBytes, err := json.Marshal(Move{ card, pile })
             buf := bytes.NewBuffer(jsonBytes)
-            resp, err := http.POST(p.GameURL + "/move", "application/json", buf)
+            resp, err := http.POST(p.GameURL, "application/json", buf)
             //err handling
             defer resp.Close()
 
@@ -334,7 +374,7 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
             dec.Decode(&data)
 
             if ! data["Ok"] {
-                return errors.New("Not a valid move")
+                return errors.New("Not a valid move or you were too slow!")
             }
         }
     case "Lake":

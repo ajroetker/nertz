@@ -47,7 +47,7 @@ func MakeAcceptPlayers(g *nertz.Game) func(ws *websocket.Conn) {
             go client.SendMessages()
             g.WaitForEnd(client)
         } else {
-            jsonMsg := map[string]string{ "Message" : "Nertz" }
+            jsonMsg := map[string]string{ "Message" : "In Progress" }
             err :=  websocket.JSON.Send(ws, jsonMsg)
             if err != nil {
                 panic("JSON.Send: " + err.Error())
