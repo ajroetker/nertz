@@ -8,45 +8,56 @@ This repository is a Go implementation of nertz using websockets for client conn
 current picture
 ===============
 
-Server
-------
-- takes a `port` to start the service on
-- accepts websocket connections at `"/"` until the game has started (at most 6 players)
-- asks for client credentials by sending a JSON Request struct `{"Message" : "Credentials"}`
-- client must provide Credentials as JSON which is parsed to (password does nothing at the moment)  
+#Server  
+- `nertz-server` takes a `<port>` to start the service on  
+- accepts websocket connections at `:<port>/` until the game has started (at most 6 players)  
+    * asks for client credentials, sending JSON `{"Message" : "Credentials"}`  
+    * client must provide Credentials as JSON (password does nothing at the moment)  
 
 ```go  
 type Credentials struct {  
-  Username string
+  Username string  
   Password string  
 }
 ```
 
-- ?"Wait for user to ask to begin?"?
+- Not sure the best way to start a game at the moment
 - Set `nertz.Game.Started := true`
-- There is another handler listening for moves at `"/move"` which takes JSON that gets parsed to a move struct
+- another handler listening at `:<port>/move"` takes POST requests with JSON bodies that gets parsed to a move struct
 
 ```go  
 type Card struct {  
   Value int
   Suit int
-  Player string 
+  Player string  
 }
 
 type Move struct {  
-  Card *Card
-  Pile int 
+  Card *Card  
+  Pile int  
 }
 ```
 
 - When a user is finished they should send a JSON encoding of their Hand (inclding if they just wish to quit)
+- A Hand right now should be implemented using linked lists for the piles
+
+```go  
+type Hand struct {  
+    Nertzpile *list.List  
+    Streampile *list.List  
+    River []*list.List  
+    Stream *list.List  
+}  
+```
+
 - Determine if this was a quit or a game over
-- Sends the user their score if it was a quit
-- Wait until users have sent in their hands and update the tallied up scoreboard to reflect their nertz piles
-- Send the users the scoreboard which will be a JSON encoded `map[string]int`
-- close the connections
-
-
+    * Sends the user their score if it was a quit
+    * Broadcasts a game over if nertz
+- When the game is over
+    * Users are expected to send in their hands
+    * Calculate their scores and update the tallied up scoreboard
+    * Send the users the scoreboard which will be a JSON encoded `map[string]int`
+    * Close the websocket connections
 
 to do
 =====
