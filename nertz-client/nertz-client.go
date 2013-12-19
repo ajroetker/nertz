@@ -11,7 +11,7 @@ import (
     "nertz"
 )
 
-func credentials() (string, string) {
+func Credentials() (string, string) {
     reader := bufio.NewReader(os.Stdin)
 
     fmt.Print("Enter Username: ")
@@ -42,18 +42,6 @@ func PrintCardStack(cs *list.List, toShow int) {
     }
 }
 
-func reader(ws *websocket.Conn, ch chan string) {
-    var buf string
-    for {
-        err := websocket.Message.Receive(ws, &buf)
-        if err != nil {
-            return
-        }
-        msg := fmt.Sprintf("Client got: %v\n", buf)
-        ch <- msg
-    }
-}
-
 func main() {
 
     if len(os.Args) != 3 {
@@ -77,8 +65,12 @@ func main() {
     }
     defer ws.Close()
 
-    name, _ := credentials()
-    player :=  NewPlayer(name, gameurl, ws) *Player {
+    name, password := Credentials()
+    err = websocket.JSON.Send(ws, nertz.Credentials{ name, password, })
+    if err != nil {
+        panic("JSON.Send: " + err.Error())
+    }
+    player :=  NewPlayer(name, gameurl, ws)
 
     fmt.Fprintf(os.Stdout, "Client connected to %v:%v...\n", host, port)
 

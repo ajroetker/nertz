@@ -19,47 +19,50 @@ type Card struct{
 /* Server-side code */
 
 type Move struct{
-    Card *Card
+    Card Card
     Pile int
 }
 
 type Game struct {
     Clients []*Client
-    Lakes chan *Lake
-    Updates chan *Lake
+    Lakes chan Lake
+    Updates chan Lake
     NewClients chan *Client
     ScoreChan chan map[string]interface{}
     GameOver chan int
     Started bool
-    Done int
+    Done chan int
     Scoreboard map[string]int
 }
 
 func NewGame() *Game {
     var game *Game  = new(Game)
     game.Clients    = make([]*Client, 0, 6)
-    game.Lakes     = make(chan *Lake, 1)
-    game.Updates    = make(chan *Lake, 10)
+    game.Lakes      = make(chan Lake, 1)
+    game.Updates    = make(chan Lake, 10)
     game.NewClients = make(chan *Client, 6)
     game.ScoreChan  = make(chan map[string]interface{}, 6)
     game.GameOver   = make(chan int, 6)
     game.Started    = false
-    game.Done       = 0
-    game.Lakes <- &Lake{ make([]*Pile, 0, 24), }
+    game.Done       = make(chan int, 1)
+    lake := Lake{ make([]Pile, 24), }
+    for pile := range lake.Piles {
+        lake.Piles[pile] = Pile{ make([]Card, 0, 13), }
+    game.Lakes <- lake
     return game
 }
 
 type Pile struct {
-    Cards []*Card
+    Cards []Card
 }
 
 type Lake struct {
-    Piles []*Pile
+    Piles []Pile
 }
 
 type Client struct {
     Conn *websocket.Conn
-    Lakes chan *Lake
+    Lakes chan Lake
     Messages chan string
     Name string
 }
@@ -109,31 +112,30 @@ func (g *Game) BroadcastMessages() {
 }
 
 func (g *Game) WaitForEnd(c *Client) {
-    var hand Hand
-    err := websocket.JSON.Receive(c.Conn, &hand)
+    var scoreupdate map[string]interface{}
+    err := websocket.JSON.Receive(c.Conn, &scoreupdate)
     if err != nil {
         log.Fatal(err)
     }
-    if g.Done == 0  {
-        if hand.IsNertz() {
+    scoreupdate["Player"] = c.Name
+    g.ScoreChan <- scoreupdate
+    done := <-g.Done
+    g.Done <- done + 1
+    if done == 0 {
+        if scoreupdate["Nertz"].(bool) {
             g.GameOver <- 1
         } else {
-
-            scoreupdate := map[string]interface{}{
-                "Player" : c.Name,
-                "Value"  : hand.Nertzpile.Len(),
-            }
-
-            g.ScoreChan <- scoreupdate
-            return
             //thanks for playing quitter!
+            scoreupdate["Value"] = g.Scoreboard[c.Name]
+            err = websocket.JSON.Send(c.Conn, scoreupdate)
+            if err != nil {
+                panic("JSON.Send: " + err.Error())
+            }
+            return
         }
     }
-    scoreupdate := map[string]interface{}{
-        "Player" : c.Name,
-        "Value"  : hand.Nertzpile.Len(),
-    }
-    g.ScoreChan <- scoreupdate
+    //Wait for the channel to close
+    // which signals that we've collected all the scores
     <-g.ScoreChan
     err = websocket.JSON.Send(c.Conn, g.Scoreboard)
     if err != nil {
@@ -149,10 +151,12 @@ type Credentials struct {
 func (g *Game) WriteScores() {
     <-g.GameOver
     for scoreupdate := range g.ScoreChan {
-        g.Done++
-        g.Scoreboard[scoreupdate["Player"].(string)] -= scoreupdate["Value"].(int)
-        if g.Done == len(g.Clients) {
+        g.Scoreboard[scoreupdate["Player"].(string)] -= 2*scoreupdate["Value"].(int)
+        done := <-g.Done
+        if done == len(g.Clients) {
             close(g.ScoreChan)
+        } else {
+            g.Done <- done
         }
     }
 }
@@ -167,7 +171,7 @@ func (c *Client) SendMessages() {
             err = websocket.JSON.Send(c.Conn, jsonMsg)
         case lake, ok := <-c.Lakes:
             if ok {
-                err =  websocket.JSON.Send(c.Conn, lake)
+                err =  websocket.JSON.Send(c.Conn, *lake)
             } else {
                 //if the channel is closed it means the game is over!
                 jsonMsg := map[string]string{ "Message" : "Nertz" }
@@ -181,15 +185,17 @@ func (c *Client) SendMessages() {
 }
 
 func (p *Player) RecieveMessages() {
-    ok := true
-    var err error
-    for ok {
+    for {
         var msg interface{}
         err := websocket.JSON.Receive(p.Conn, &msg)
         if err != nil {
             panic("JSON.Recieve: " + err.Error())
         }
-        switch msg.(type) {
+        switch val := msg.(type) {
+        case Lake:
+            p.Lakes <- val
+        case map[string]interface{}:
+            p.Messages <- val
         }
     }
 }
@@ -233,9 +239,9 @@ type Player struct {
     Hand *Hand
     Conn *websocket.Conn
     GameURL string
-    Lakes chan *Lake
-    Messages chan string
-    Lake *Lake
+    Lakes chan Lake
+    Messages chan map[string]interface{}
+    Lake Lake
 }
 
 func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
@@ -245,7 +251,7 @@ func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
     player.Name = name
     player.GameURL = url
     player.Lakes = make(chan *Lake, 10)
-    player.Messages = make(chan string, 10)
+    player.Messages = make(chan map[string]interface{}, 10)
     return player
 }
 
@@ -272,7 +278,7 @@ type Hand struct {
     Stream *list.List
 }
 
-Transaction("Nertzpile", _, "Lake", _, 1)
+//Transaction("Nertzpile", _, "Lake", _, 1)
 
 func (h *Hand) Transaction(from string, fpilenum int, to string, tpilenum int, numcards int) error {
     legalFromTos := map[string][]string{
@@ -363,7 +369,7 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List ) error {
         } else {
             //send request to server checking move!
             card := cards.Front().Value
-            jsonBytes, err := json.Marshal(Move{ card, pile })
+            jsonBytes, err := json.Marshal(Move{ *card, pile })
             buf := bytes.NewBuffer(jsonBytes)
             resp, err := http.POST(p.GameURL, "application/json", buf)
             //err handling

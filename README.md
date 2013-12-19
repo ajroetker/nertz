@@ -11,7 +11,7 @@ current picture
 #Server  
 - `nertz-server` takes a `<port>` to start the service on  
 - accepts websocket connections at `:<port>/` until the game has started (at most 6 players)  
-    * asks for client credentials, sending JSON `{"Message" : "Credentials"}`  
+    * asks for client credentials, sending JSON `{ "Message" : "Credentials" }`  
     * client must provide Credentials as JSON (password does nothing at the moment)  
 
 ```go  
@@ -38,26 +38,27 @@ type Move struct {
 }
 ```
 
-- When a user is finished they should send a JSON encoding of their Hand (inclding if they just wish to quit)
-- A Hand right now should be implemented using linked lists for the piles
-
-```go  
-type Hand struct {  
-    Nertzpile *list.List  
-    Streampile *list.List  
-    River []*list.List  
-    Stream *list.List  
-}  
-```
-
-- Determine if this was a quit or a game over
+- When a user is finished they should send JSON similar to `{"Value" : 4 , "Nertz" : true }`
+    * "Value" here is determined by the size of their Nertz pile
+- Determine if this was a quit or a game over according to "Nertz
     * Sends the user their score if it was a quit
     * Broadcasts a game over if nertz
 - When the game is over
+    * A `{ "Message" : "Nertz" }` is broadcast
     * Users are expected to send in their hands
     * Calculate their scores and update the tallied up scoreboard
     * Send the users the scoreboard which will be a JSON encoded `map[string]int`
     * Close the websocket connections
+
+#Client  
+- `nertz-client` takes a `<host>` and `<port>` to connect to  
+- TODO game begins when a client sends message to server asking to begin and recieves the ok from the other clients  
+
+- a sample client specification in the terminal in shown in the accompaning README.md  
+- the client can pickup linked lists of cards and move them to the other piles  
+    * this implementation was chosen specifically to be extended easily to a GUI or browser  
+
+- wait for a "Game over"  message from the sever and then count the nertz pile and send it back as a response  
 
 to do
 =====
@@ -67,12 +68,17 @@ There is a lot to do on the server side still, making it safe, printing error me
 __Server__
 - [ ] Game Begin Interaction  
 - [x] Game Over Interaction  
-- [ ] Quiting  
+- [x] Quiting  
+- [x] Accept clients and broadcast messages  
+- [x] HTTP and Websocket Handlers  
 - [ ] Handling Multiple Games  
 - [ ] Handling variable numbers of clients  
 - [ ] Database for Credentials/ High scores tracking
 
 __Client__
+- [ ] Display the Arena
+- [x] Display the Hand
+- [ ] Display the Messages
 - [ ] Client Nertz Code
 - [ ] Terminal display code (a nice implementation might resemble a [progress bar](http://www.darkcoding.net/software/pretty-command-line-console-output-on-unix-in-python-and-go-lang/ "A nice example of a GoLang progress bar")  
 - [ ] Credentials handling/Logging in  
