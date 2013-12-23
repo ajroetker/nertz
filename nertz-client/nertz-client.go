@@ -8,7 +8,7 @@ import (
     "strconv"
     "bufio"
     "strings"
-    "nertz"
+    "github.com/ajroetker/nertz"
 )
 
 func Credentials() (string, string) {
@@ -21,25 +21,6 @@ func Credentials() (string, string) {
     password, _ := reader.ReadString('\n')
 
     return strings.TrimSpace(username), strings.TrimSpace(password) // ReadString() leaves a trailing newline character
-}
-
-func PrintCardStack(cs *list.List, toShow int) {
-    stack := "[%v"
-    for e := cs.Front() ; e != nil ; e = e.Next() {
-        if toShow > 0 {
-            card := fmt.Sprintf("%v%v]%%v", e.Value.Value, e.Value.Suit))     
-            stack = fmt.Sprintf(stack, card)
-            toShow--
-        } else {
-            stack = fmt.Sprintf(stack, "]%v")
-        }   
-    }
-    stack = fmt.Sprintf(stack, "")
-    if stack == "[" {
-       fmt.Println("empty stack")
-    } else {
-        fmt.Println(stack)
-    }
 }
 
 func main() {
@@ -70,28 +51,9 @@ func main() {
     if err != nil {
         panic("JSON.Send: " + err.Error())
     }
-    player :=  NewPlayer(name, gameurl, ws)
+    player := nertz.NewPlayer(name, gameurl, ws)
 
     fmt.Fprintf(os.Stdout, "Client connected to %v:%v...\n", host, port)
-
-    go reader(ws, ch)
-    for {
-        select {
-        case msg := <-ch:
-            fmt.Printf(msg)
-        default:
-            reader := bufio.NewReader(os.Stdin)
-            fmt.Print("Server gets: ")
-            msg, err := reader.ReadString('\n')
-            msg = strings.TrimSpace(msg)
-            if err != nil {
-                log.Fatal(err)
-            }
-
-            err = websocket.Message.Send(ws, msg)
-            if err != nil {
-                log.Fatal(err)
-            }
-        }
-    }
+    go player.HandleMessages()
+    player.RecieveMessages()
 }
