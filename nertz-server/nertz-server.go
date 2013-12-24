@@ -14,9 +14,9 @@ import (
 func MakeReadyHandler(g *nertz.Game) func(w http.ResponseWriter, r *http.Request) {
     return func(w http.ResponseWriter, r *http.Request) {
         var resp = make(map[string]string)
+        w.Header().Set("Content-Type", "application/json")
         if ! g.Started {
             resp["Message"] = "Waiting on the other players..."
-            w.Header().Set("Content-Type", "application/json")
             enc := json.NewEncoder(w)
             enc.Encode(resp)
 
@@ -25,14 +25,12 @@ func MakeReadyHandler(g *nertz.Game) func(w http.ResponseWriter, r *http.Request
                 g.Begin <- 1
             }
             g.ReadyPlayers <- val + 1
-            return
         } else {
             resp["Message"] = "Already Started!"
-            w.Header().Set("Content-Type", "application/json")
             enc := json.NewEncoder(w)
             enc.Encode(resp)
-            return
         }
+        return
     }
 }
 

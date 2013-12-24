@@ -55,5 +55,9 @@ func main() {
 
     fmt.Fprintf(os.Stdout, "Client connected to %v:%v...\n", host, port)
     go player.HandleMessages()
-    player.RecieveMessages()
+    go player.ReceiveMessages()
+    for {
+        player.RenderBoard()
+        player.ReceiveCommands()
+    }
 }

@@ -11,7 +11,7 @@ help
     eg: move As 1; move 2s 1; move 3s 1; move Ad 2;
 
 draw  
- 
+
 move Qh Ks  
      (works)  
 move 4s 5h  
@@ -65,4 +65,4 @@ stream:        [[[[[ Ad[ 2s[ Kc]
 nertz pile:    [[[[[[[[[[[[[[[[[[[[[ Qh ]  
          (or)  [11 cards[ Qh ]  
          (or)  [[[[[[...[ Qh ]  
- ```
+```

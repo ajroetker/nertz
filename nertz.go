@@ -4,6 +4,8 @@ import (
     "fmt"
     "container/list"
     "math/rand"
+    "strings"
+    "strconv"
     websocket "code.google.com/p/go.net/websocket"
 )
 
@@ -55,6 +57,37 @@ func (c *Card) Stringify() string {
     return fmt.Sprintf("%v%v", suit, value)
 }
 
+func Cardify(s string, player string) Card {
+    cardinfo := strings.Split(s, "")
+    svalue := cardinfo[0]
+    ssuit := cardinfo[1]
+    var suit int
+    var value int
+    switch svalue {
+    case "A":
+        value = 1
+    case "J":
+        value = 11
+    case "Q":
+        value = 12
+    case "K":
+        value = 13
+    default:
+        value, _ = strconv.Atoi(svalue)
+    }
+    switch ssuit {
+    case "s":
+        suit = 1
+    case "h":
+        suit = 2
+    case "c":
+        suit = 3
+    case "d":
+        suit = 4
+    }
+    return Card{ value, suit, player, }
+}
+
 /** Communication **/
 
 type Credentials struct {
@@ -99,6 +132,14 @@ type Game struct {
 
 /*** Constructors ***/
 
+func NewLake(players int) Lake {
+    lake := Lake{ make([]Pile, players * 4), }
+    for pile := range lake.Piles {
+        lake.Piles[pile] = Pile{ make([]Card, 0, 13), }
+    }
+    return lake
+}
+
 func NewGame(players int) *Game {
     var game *Game    = new(Game)
     game.Clients      = make([]*Client, 0, players)
@@ -111,10 +152,7 @@ func NewGame(players int) *Game {
     game.Begin        = make(chan int)
     game.Started      = false
     game.Done         = make(chan int, 1)
-    lake := Lake{ make([]Pile, players * 4), }
-    for pile := range lake.Piles {
-        lake.Piles[pile] = Pile{ make([]Card, 0, 13), }
-    }
+    lake := NewLake(players)
     game.Lakes <- lake
     return game
 }
@@ -131,9 +169,16 @@ func (g *Game) NewClient(ws *websocket.Conn) *Client {
 /*** Display ***/
 
 func (l *Lake) Display() {
+    var scard string
     for pile := range l.Piles {
-        fmt.Println(l.Piles[pile].Cards[0].Stringify())
+        if pile > 0 {
+            tmp := fmt.Sprintf(" [%v]%%v", l.Piles[pile].Cards[0].Stringify())
+            scard = fmt.Sprintf(scard, tmp)
+        } else {
+            scard = fmt.Sprintf("[%v]%%v", l.Piles[pile].Cards[0].Stringify())
+        }
     }
+    fmt.Println(scard)
 }
 
 /* Client */
@@ -213,6 +258,7 @@ func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
     player.Conn = ws
     player.Name = name
     player.GameURL = url
+    player.Lake = Lake{}
     player.Done = false
     player.Lakes = make(chan Lake, 10)
     player.Messages = make(chan map[string]interface{}, 10)
