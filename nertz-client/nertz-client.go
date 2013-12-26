@@ -38,7 +38,7 @@ func main() {
 
     origin := "http://localhost/"
     wsurl := fmt.Sprintf("ws://%v:%v/ws", host, port)
-    gameurl := fmt.Sprintf("http://%v:%v/move", host, port)
+    url := fmt.Sprintf("http://%v:%v", host, port)
 
     ws, err := websocket.Dial(wsurl, "", origin)
     if err != nil {
@@ -51,7 +51,7 @@ func main() {
     if err != nil {
         panic("JSON.Send: " + err.Error())
     }
-    player := nertz.NewPlayer(name, gameurl, ws)
+    player := nertz.NewPlayer(name, url, ws)
 
     fmt.Fprintf(os.Stdout, "Client connected to %v:%v...\n", host, port)
     go player.HandleMessages()

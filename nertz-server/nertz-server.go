@@ -37,34 +37,30 @@ func MakeReadyHandler(g *nertz.Game) func(w http.ResponseWriter, r *http.Request
 func MakeMoveHandler(g *nertz.Game) func(w http.ResponseWriter, r *http.Request) {
     return func(w http.ResponseWriter, r *http.Request) {
         var resp = make(map[string]bool)
-        if ! g.Started {
+        if g.Started {
             data := new(nertz.Move)
             dec := json.NewDecoder(r.Body)
             dec.Decode(&data)
             //TODO Document this in the README.md
             resp["Ok"] = g.MakeMove(data)
-            w.Header().Set("Content-Type", "application/json")
-            enc := json.NewEncoder(w)
-            enc.Encode(resp)
-            return
         } else {
             resp["Ok"] = false
-            w.Header().Set("Content-Type", "application/json")
-            enc := json.NewEncoder(w)
-            enc.Encode(resp)
-            return
         }
+        w.Header().Set("Content-Type", "application/json")
+        enc := json.NewEncoder(w)
+        enc.Encode(resp)
+        return
     }
 }
 
 func MakeAcceptPlayers(g *nertz.Game) func(ws *websocket.Conn) {
     return func(ws *websocket.Conn) {
         if ! g.Started {
-            fmt.Fprintf(os.Stdout, "***Nertz server accepted a new player***\n")
 
             client := g.NewClient(ws)
             creds := client.GetCredentials()
             client.Name = creds.Username
+            fmt.Fprintf(os.Stdout, "*** Nertz server accepted %v as a player ***\n", client.Name)
 
             g.WaitForStart(client)
             go client.SendMessages()
@@ -94,6 +90,7 @@ func main() {
     game := nertz.NewGame(6)
     go game.BroadcastMessages()
     go game.WriteScores()
+    go game.AddNewClients()
 
     GameHandler  := MakeAcceptPlayers(game)
     MoveHandler  := MakeMoveHandler(game)

@@ -29,12 +29,14 @@ type Move struct{
 
 /*** Display ***/
 
-func (c *Card) Stringify() string {
+func (c Card) Stringify() string {
     var suit string
     var value string
     switch c.Value {
     case 1:
         value = "A"
+    case 10:
+        value = "T"
     case 11:
         value = "J"
     case 12:
@@ -54,7 +56,7 @@ func (c *Card) Stringify() string {
     case 4:
         suit = "\xE2\x99\xA6"
     }
-    return fmt.Sprintf("%v%v", suit, value)
+    return fmt.Sprintf("%v %v", value, suit)
 }
 
 func Cardify(s string, player string) Card {
@@ -66,6 +68,8 @@ func Cardify(s string, player string) Card {
     switch svalue {
     case "A":
         value = 1
+    case "T":
+        value = 10
     case "J":
         value = 11
     case "Q":
@@ -149,7 +153,8 @@ func NewGame(players int) *Game {
     game.ScoreChan    = make(chan map[string]interface{}, players)
     game.GameOver     = make(chan int, players)
     game.ReadyPlayers = make(chan int, players)
-    game.Begin        = make(chan int)
+    game.ReadyPlayers <- 0
+    game.Begin        = make(chan int, 1)
     game.Started      = false
     game.Done         = make(chan int, 1)
     lake := NewLake(players)
@@ -170,14 +175,23 @@ func (g *Game) NewClient(ws *websocket.Conn) *Client {
 
 func (l *Lake) Display() {
     var scard string
+    scard ="Lake: %v"
     for pile := range l.Piles {
-        if pile > 0 {
-            tmp := fmt.Sprintf(" [%v]%%v", l.Piles[pile].Cards[0].Stringify())
-            scard = fmt.Sprintf(scard, tmp)
+        var toprint string
+        if len(l.Piles[pile].Cards) != 0 {
+            toprint = l.Piles[pile].Cards[len(l.Piles[pile].Cards) - 1].Stringify()
         } else {
-            scard = fmt.Sprintf("[%v]%%v", l.Piles[pile].Cards[0].Stringify())
+            toprint = " "
         }
+        var tmp string
+        if pile > 0 {
+            tmp = fmt.Sprintf(" [%v]%%v", toprint )
+        } else {
+            tmp = fmt.Sprintf("[%v]%%v", toprint )
+        }
+        scard = fmt.Sprintf(scard, tmp)
     }
+    scard = fmt.Sprintf(scard, "")
     fmt.Println(scard)
 }
 
@@ -194,11 +208,11 @@ type Hand struct {
 
 /*** Constructors ***/
 
-func NewShuffledDeck(player string) []*Card {
-    deck := make([]*Card, 52)
-    for i := 1; i <= 4; i++ {
-        for j := 1; j<= 13; j++ {
-            deck[i*j-1] = &Card{ j, i, player, }
+func NewShuffledDeck(player string) []Card {
+    deck := make([]Card, 52)
+    for i := 0; i < 4; i++ {
+        for j := 0; j < 13; j++ {
+            deck[i*13+j] = Card{ j+1, i+1, player, }
         }
     }
     for i := 51; i > 0; i-- {
@@ -228,7 +242,7 @@ func NewHand(player string) *Hand {
 
     hand.Streampile = list.New()
     for ; i < len(cards) ; i++ {
-        hand.Nertzpile.PushFront(cards[i])
+        hand.Streampile.PushFront(cards[i])
     }
 
     hand.Stream = list.New()
@@ -244,7 +258,7 @@ type Player struct {
     Hand *Hand
     Conn *websocket.Conn
     Done bool
-    GameURL string
+    URL string
     Lakes chan Lake
     Messages chan map[string]interface{}
     Lake Lake
@@ -257,7 +271,7 @@ func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
     player.Hand = NewHand(name)
     player.Conn = ws
     player.Name = name
-    player.GameURL = url
+    player.URL = url
     player.Lake = Lake{}
     player.Done = false
     player.Lakes = make(chan Lake, 10)
@@ -271,7 +285,7 @@ func PrintCardStack(cs *list.List, toShow int) {
     stack := "[%v"
     for e := cs.Front() ; e != nil ; e = e.Next() {
         if toShow > 0 {
-            card := fmt.Sprintf("%v%v]%%v", e.Value.(*Card).Stringify())
+            card := fmt.Sprintf("%v]%%v", e.Value.(Card).Stringify())
             stack = fmt.Sprintf(stack, card)
             toShow--
         } else {
@@ -287,12 +301,20 @@ func PrintCardStack(cs *list.List, toShow int) {
 }
 
 func (h *Hand) Display() {
+    fmt.Print("Nertzpile: ")
     PrintCardStack(h.Nertzpile, 1)
+    fmt.Print("Streampile: ")
     PrintCardStack(h.Streampile, 0)
     for pile := range h.River {
+        if pile == 0 {
+            fmt.Print("River: ")
+        } else {
+            fmt.Print("       ")
+        }
         PrintCardStack(h.River[pile], h.River[pile].Len())
     }
-    PrintCardStack(h.Stream, 3)
+    fmt.Print("Stream: ")
+    PrintCardStack(h.Stream, 3 )
 }
 
 func (h *Hand) IsNertz() bool {

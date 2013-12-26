@@ -1,6 +1,8 @@
 package nertz
 
 import (
+    "fmt"
+    "os"
     "log"
     websocket "code.google.com/p/go.net/websocket"
 )
@@ -19,12 +21,15 @@ func (c *Client) GetCredentials() *Credentials {
 
 func (g *Game) AddNewClients() {
     for cli := range g.NewClients {
-        g.Clients[len(g.Clients)] = cli
+        g.Clients = append(g.Clients, cli)
     }
 }
 
 func (g *Game) WaitForStart(c *Client) {
     <-g.Begin
+    g.Begin <- 1
+    g.Started = true
+    fmt.Fprintf( os.Stdout, "Let the game begin!\n")
     c.Messages <- "Let's Begin!"
     return
 }
@@ -75,15 +80,15 @@ func (s *Game) MakeMove(move *Move) bool {
     size := len(a.Piles[move.Pile].Cards)
     var resp bool
     if size == 0 && move.Card.Value == 1 {
-        a.Piles[move.Pile].Cards[size] = move.Card
+        a.Piles[move.Pile].Cards = append( a.Piles[move.Pile].Cards, move.Card )
         resp = true
     } else {
         top := a.Piles[move.Pile].Cards[size-1].Value
-        suit := a.Piles[move.Pile].Cards[0].Suit
-        if move.Card.Value != top + 1 || suit != move.Card.Value || top == 13 {
+        suit := a.Piles[move.Pile].Cards[size-1].Suit
+        if move.Card.Value != top + 1 || suit != move.Card.Suit || top == 13 {
             resp = false
         } else {
-            a.Piles[move.Pile].Cards[size] = move.Card
+            a.Piles[move.Pile].Cards = append( a.Piles[move.Pile].Cards, move.Card )
             resp = true
         }
     }

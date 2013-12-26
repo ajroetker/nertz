@@ -5,6 +5,7 @@ import (
     "container/list"
     "bytes"
     "fmt"
+    "strings"
     "net/http"
     "os"
     "bufio"
@@ -22,10 +23,16 @@ func (p *Player) ReceiveMessages() {
         if err != nil {
             panic("JSON.Recieve: " + err.Error())
         }
+
         switch val := msg.(type) {
-        case Lake:
-            p.Lakes <- val
         case map[string]interface{}:
+            _, ok := val["Piles"]
+            if ok {
+                var lake Lake
+                byteLake, _ := json.Marshal(val)
+                json.Unmarshal(byteLake, &lake)
+                p.Lakes <- lake
+            }
             p.Messages <- val
         }
     }
@@ -52,14 +59,13 @@ func (p *Player) HandleMessages() {
                 case "Already Started!":
                 case "In Progress":
                 default:
+                    //print the message
                 }
             } else {
                 //display the scoreboard
             }
-        case lake, ok := <-p.Lakes:
-            if ok {
-                p.Lake = lake
-            }
+        case lake := <-p.Lakes:
+            p.Lake = lake
         }
         if err != nil {
             panic("JSON.Send: " + err.Error())
@@ -73,28 +79,46 @@ func (p *Player) ReceiveCommands() {
     reader := bufio.NewReader(os.Stdin)
 
     fmt.Print("Enter Command: ")
-    var cmd, scard, stocard, pile string
+    var scard, stocard, pile string
     var depth, pilenum int
-    fmt.Fscanln(reader, cmd, scard, stocard)
-    if scard != "" {
-        pile, pilenum, depth = p.GetCard( scard )
-    }
+    cmd, _ := reader.ReadString('\n')
+    parts := strings.Split(strings.TrimSpace(cmd), " ")
+    cmd     = parts[0]
 
+    var err error
     switch cmd {
+    case "ready":
+        fmt.Println("Sending request to " + p.URL + "/ready")
+        resp, _ := http.Get(p.URL + "/ready")
+        fmt.Println("Sent request to " + p.URL + "/ready")
+        defer resp.Body.Close()
+
+        data := make(map[string]string)
+        dec := json.NewDecoder(resp.Body)
+        dec.Decode(&data)
+        fmt.Println( data["Message"] )
+
     case "lake":
+        scard   = parts[1]
+        stocard = parts[2]
+        pile, pilenum, depth = p.GetCard( scard )
         tocard, _ := strconv.Atoi( stocard )
         if depth == 0 {
             p.Transaction( pile, pilenum, "Lake", tocard, depth + 1 )
         }
     case "move":
-        topile, topilenum, depth := p.GetCard( stocard )
-        if depth == 0 {
-            p.Transaction( pile, pilenum, topile, topilenum, depth + 1 )
+        scard   = parts[1]
+        stocard = parts[2]
+        pile, pilenum, depth = p.GetCard( scard )
+        topile, topilenum, _ := p.GetCard( stocard )
+        err = p.Transaction( pile, pilenum, topile, topilenum, depth + 1 )
+        if err != nil {
+            fmt.Println(err)
         }
     case "fish":
         for topile := range p.Hand.River {
             if p.Hand.River[topile].Len() == 0  {
-                p.Transaction( "Nertzpile", -1, "River", -1, 1 )
+                p.Transaction( "Nertzpile", -1, "River", topile, 1 )
             }
         }
     case "draw":
@@ -102,12 +126,15 @@ func (p *Player) ReceiveCommands() {
         switch {
         case 0 == drawlen:
             if streamlen := p.Hand.Stream.Len(); streamlen != 0 {
-                p.Transaction( "Stream", -1, "Streampile", -1, streamlen )
+                err = p.Transaction( "Stream", -1, "Streampile", -1, streamlen )
             }
         case drawlen < 3:
-            p.Transaction( "Sreampile", -1, "Stream", -1, drawlen )
+            err = p.Transaction( "Streampile", -1, "Stream", -1, drawlen )
         default:
-            p.Transaction( "Sreampile", -1, "Stream", -1, 3 )
+            err = p.Transaction( "Streampile", -1, "Stream", -1, 3 )
+        }
+        if err != nil {
+            fmt.Println(err)
         }
     case "quit":
         jsonMsg := map[string]interface{}{
@@ -140,16 +167,22 @@ func (p *Player) GetCard( scard string ) ( string, int, int ) {
     card := Cardify( scard, p.Name )
     e := h.Nertzpile.Front()
     if card == e.Value.(Card) {
+        println("Found in the nertz-pile...")
         return "Nertzpile", 0, 0
     }
-    e = h.Stream.Front()
-    if card == e.Value.(Card) {
-        return "Stream", 0, 0
+    if h.Stream.Len() > 0 {
+        e = h.Stream.Front()
+        if card == e.Value.(Card) {
+            println("Found in the stream...")
+            return "Stream", 0, 0
+        }
     }
+
     for pile := range h.River {
         depth := 0
         for e = h.River[pile].Front() ; e != nil ; e = e.Next() {
             if card == e.Value.(Card) {
+                println("Found in the river...")
                 return "River", pile, depth
             }
             depth++
@@ -166,12 +199,14 @@ func (p *Player) Transaction(from string, fpilenum int, to string, tpilenum int,
         "Streampile" : []string{ "Stream" },
         "Stream" : []string{ "River", "Lake", "Streampile" },
     }
-    legalTos := legalFromTos[from]
-    return errors.New("Not a legal move brah!")
+    legalTos, ok := legalFromTos[from]
+    if !ok {
+        return errors.New("Not a legal move brah!")
+    }
     for _, v := range legalTos {
         if v == to {
             cards := h.TakeFrom( from, fpilenum, numcards )
-            err := h.GiveTo( to, tpilenum, cards, p.GameURL )
+            err := h.GiveTo( to, tpilenum, cards, p.URL + "/move" )
             if err != nil {
                 return err
             } else {
@@ -210,21 +245,20 @@ func (h *Hand) TakeFrom( pile string, pilenum int, numcards int ) *list.List {
     if numcards == 0 {
         return cards
     }
+    var e *list.Element
     switch pile {
     case "Nertzpile":
-        cards.PushFront(h.Nertzpile.Front().Value)
+        e = h.Nertzpile.Front()
     case "Streampile":
-        for i := 0 ; i < numcards ; i++ {
-            cards.PushFront(h.Streampile.Front().Value)
-        }
+        e = h.Streampile.Front()
     case "Stream":
-        for i := 0 ; i < numcards ; i++ {
-            cards.PushBack(h.Stream.Front().Value)
-        }
+        e = h.Stream.Front()
     case "River":
-        for i := 0 ; i < numcards ; i++ {
-            cards.PushBack(h.River[pilenum].Front().Value)
-        }
+        e = h.River[pilenum].Front()
+    }
+    for i := 0 ; i < numcards ; i++ {
+        cards.PushBack(e.Value)
+        e = e.Next()
     }
     return cards
 }
@@ -236,8 +270,8 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List, url string) e
             return errors.New("Cannot send multiple cards to River")
         } else {
             //send request to server checking move!
-            card := cards.Front().Value.(*Card)
-            jsonBytes, _ := json.Marshal(Move{ *card, pilenum })
+            card := cards.Front().Value.(Card)
+            jsonBytes, _ := json.Marshal(Move{ card, pilenum })
             buf := bytes.NewBuffer(jsonBytes)
             resp, _ := http.Post(url, "application/json", buf)
             //err handling
@@ -255,9 +289,9 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List, url string) e
         if h.River[pilenum].Len() == 0 {
             h.River[pilenum].PushFrontList(cards)
         } else {
-            backcard := cards.Back().Value.(*Card)
-            frontcard := h.River[pilenum].Front().Value.(*Card)
-            if frontcard.Value == backcard.Value + 1 && frontcard.Suit % backcard.Suit != 0 {
+            backcard := cards.Back().Value.(Card)
+            frontcard := h.River[pilenum].Front().Value.(Card)
+            if frontcard.Value == backcard.Value + 1 && ( frontcard.Suit + backcard.Suit ) % 2 != 0 {
                 h.River[pilenum].PushFrontList(cards)
             } else {
                 return errors.New("Not a valid move")
@@ -270,7 +304,7 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List, url string) e
     case "Streampile":
         if h.Streampile.Len() == 0 {
             // expecting to get the stream back here
-            h.Stream.PushFrontList(cards)
+            h.Streampile.PushFrontList(cards)
         } else {
             return errors.New("Streampile hasn't run out... something went wrong")
         }
