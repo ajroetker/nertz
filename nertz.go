@@ -185,9 +185,9 @@ func (l *Lake) Display() {
         }
         var tmp string
         if pile > 0 {
-            tmp = fmt.Sprintf(" [%v]%%v", toprint )
+            tmp = fmt.Sprintf(" [ %v ]%%v", toprint )
         } else {
-            tmp = fmt.Sprintf("[%v]%%v", toprint )
+            tmp = fmt.Sprintf("[ %v ]%%v", toprint )
         }
         scard = fmt.Sprintf(scard, tmp)
     }
@@ -282,19 +282,19 @@ func NewPlayer(name string, url string, ws *websocket.Conn) *Player {
 /*** Display ***/
 
 func PrintCardStack(cs *list.List, toShow int) {
-    stack := "[%v"
+    stack := "[ %v"
     for e := cs.Front() ; e != nil ; e = e.Next() {
         if toShow > 0 {
-            card := fmt.Sprintf("%v]%%v", e.Value.(Card).Stringify())
+            card := fmt.Sprintf("%v ]%%v", e.Value.(Card).Stringify())
             stack = fmt.Sprintf(stack, card)
             toShow--
         } else {
-            stack = fmt.Sprintf(stack, "]%v")
+            stack = fmt.Sprintf(stack, " ]%v")
         }
     }
     stack = fmt.Sprintf(stack, "")
-    if stack == "[" {
-       fmt.Println("empty")
+    if stack == "[ " {
+       fmt.Println("")
     } else {
         fmt.Println(stack)
     }
