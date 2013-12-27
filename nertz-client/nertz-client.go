@@ -8,6 +8,7 @@ import (
     "strconv"
     "bufio"
     "strings"
+    "time"
     "github.com/ajroetker/nertz"
 )
 
@@ -47,17 +48,10 @@ func main() {
     defer ws.Close()
 
     name, password := Credentials()
-    err = websocket.JSON.Send(ws, nertz.Credentials{ name, password, })
-    if err != nil {
-        panic("JSON.Send: " + err.Error())
-    }
-    player := nertz.NewPlayer(name, url, ws)
+    player := nertz.NewPlayer(name, password, url, ws)
 
-    fmt.Fprintf(os.Stdout, "Client connected to %v:%v...\n", host, port)
-    go player.HandleMessages()
     go player.ReceiveMessages()
-    for {
-        player.RenderBoard()
-        player.ReceiveCommands()
-    }
+    fmt.Fprintf(os.Stdout, "\nConnecting to the server at %v:%v...\n\n", host, port)
+    time.Sleep(1000 * time.Millisecond)
+    player.HandleMessages()
 }

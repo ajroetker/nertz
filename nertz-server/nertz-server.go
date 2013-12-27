@@ -58,12 +58,13 @@ func MakeAcceptPlayers(g *nertz.Game) func(ws *websocket.Conn) {
         if ! g.Started {
 
             client := g.NewClient(ws)
+            go client.SendMessages()
+
             creds := client.GetCredentials()
             client.Name = creds.Username
-            fmt.Fprintf(os.Stdout, "*** Nertz server accepted %v as a player ***\n", client.Name)
 
-            g.WaitForStart(client)
-            go client.SendMessages()
+            fmt.Fprintf(os.Stdout, "--------------------------------------------\n  Nertz server accepted %v as a player  \n--------------------------------------------\n", client.Name)
+
             g.WaitForEnd(client)
         } else {
             jsonMsg := map[string]string{ "Message" : "In Progress" }
@@ -87,7 +88,7 @@ func main() {
     }
     listenAt := fmt.Sprintf(":%v", port)
 
-    game := nertz.NewGame(6)
+    game := nertz.NewGame()
     go game.BroadcastMessages()
     go game.WriteScores()
     go game.AddNewClients()

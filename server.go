@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "log"
+    "time"
     websocket "code.google.com/p/go.net/websocket"
 )
 
@@ -25,18 +26,17 @@ func (g *Game) AddNewClients() {
     }
 }
 
-func (g *Game) WaitForStart(c *Client) {
-    <-g.Begin
-    g.Begin <- 1
-    g.Started = true
-    fmt.Fprintf( os.Stdout, "Let the game begin!\n")
-    c.Messages <- "Let's Begin!"
-    return
-}
-
 func (g *Game) BroadcastMessages() {
     for {
         select {
+        case <-g.Begin:
+            g.Started = true
+            g.Init(len(g.Clients))
+            time.Sleep(100 * time.Millisecond)
+            fmt.Fprintf( os.Stdout, "--------------------------------------------\n             Let the game begin!            \n--------------------------------------------\n")
+            for _, c := range g.Clients {
+                c.Messages <- "Let's Begin!"
+            }
         case lake := <-g.Updates:
             for _, c := range g.Clients {
                 c.Lakes <- lake
@@ -124,6 +124,7 @@ func (g *Game) WaitForEnd(c *Client) {
             g.GameOver <- 1
         } else {
             //thanks for playing quitter!
+            fmt.Fprintf(os.Stdout, "--------------------------------------------\n            %v quit player nertz\n--------------------------------------------\n", c.Name)
             scoreupdate["Value"] = g.Scoreboard[c.Name]
             err = websocket.JSON.Send(c.Conn, scoreupdate)
             if err != nil {

@@ -7,6 +7,7 @@ import (
     "fmt"
     "strings"
     "net/http"
+    "time"
     "os"
     "bufio"
     "strconv"
@@ -17,7 +18,8 @@ import (
 /* Client-side code */
 
 func (p *Player) ReceiveMessages() {
-    for {
+    done := false
+    for ! done {
         var msg interface{}
         err := websocket.JSON.Receive(p.Conn, &msg)
         if err != nil {
@@ -26,54 +28,121 @@ func (p *Player) ReceiveMessages() {
 
         switch val := msg.(type) {
         case map[string]interface{}:
-            _, ok := val["Piles"]
-            if ok {
+            if _, ok := val["Piles"]; ok {
                 var lake Lake
                 byteLake, _ := json.Marshal(val)
                 json.Unmarshal(byteLake, &lake)
-                p.Lakes <- lake
+                p.Lake = lake
+            } else {
+                //if this was a quit or gameover message stop looping
+                _, ok := val["Value"]
+                _, ook := val[p.Name]
+                if ok || ook {
+                    done = true
+                }
+                p.Messages <- val
             }
-            p.Messages <- val
         }
     }
 }
 
+func (p *Player) EndGame(isQuitting bool) {
+    if ! p.Done {
+        jsonMsg := map[string]interface{}{
+            "Value" : p.Hand.Nertzpile.Len(),
+            "Nertz" : !isQuitting,
+        }
+        websocket.JSON.Send(p.Conn, jsonMsg)
+        p.Done = true
+    }
+}
+
 func (p *Player) HandleMessages() {
-    var err error
+    waiting := 0
+    PrintSeparator("=")
     for {
         select {
         case msg := <-p.Messages:
             contents, ok := msg["Message"]
             if ok {
-                switch contents {
+                switch contents.(string) {
                 case "Nertz":
-                    if ! p.Done {
-                        jsonMsg := map[string]interface{}{
-                            "Value" : p.Hand.Nertzpile.Len(),
-                            "Nertz" : true,
-                        }
-                        err = websocket.JSON.Send(p.Conn, jsonMsg)
-                        p.Done = true
-                    }
+                    fmt.Printf("\n! Looks like the game is over !\n")
+                    p.EndGame(false)
                 case "Let's Begin!":
+                    fmt.Printf("\r\n-----------------------\n! Let the games begin !\n-----------------------\n")
+                    p.Started = true
                 case "Already Started!":
+                    fmt.Printf("\r\n! The game already started !\n")
+                case "Waiting on the other players...":
+                    if ! p.Started {
+                        fmt.Printf("%v\n", contents)
+                    }
                 case "In Progress":
+                    fmt.Printf("\n! The game already started !\n")
+                case "Credentials":
+                    err := websocket.JSON.Send(p.Conn, Credentials{ p.Name, p.Password, })
+                    if err != nil {
+                        panic("JSON.Send: " + err.Error())
+                    }
                 default:
-                    //print the message
+                    fmt.Printf("\n! %v !\n", contents)
                 }
             } else {
                 //display the scoreboard
+                if val, ok := msg["Value"]; ok {
+                    fmt.Printf( "You quit with a score of %v.\nThanks for playing!", val )
+                } else {
+                    if _, ok := msg[p.Name]; ok {
+                        DisplayScoreboard(msg)
+                    } else {
+                        fmt.Println(msg)
+                    }
+                }
             }
-        case lake := <-p.Lakes:
-            p.Lake = lake
-        }
-        if err != nil {
-            panic("JSON.Send: " + err.Error())
+        default:
+            if ! p.Done && ! p.Ready {
+                fmt.Print("\nLet the server know when you're ready....\n")
+                p.ReceiveCommands()
+            } else {
+                if ! p.Started && ! p.Done {
+                    s := "."
+                    for i := 0 ; i < waiting ; i++ {
+                        s = s + "."
+                    }
+                    for i := 0 ; i < 60 - waiting ; i++ {
+                        s = s + " "
+                    }
+                    s = s + "\r"
+                    fmt.Print(s)
+                    waiting = ( waiting + 1 ) % 60
+                    time.Sleep(100 * time.Millisecond)
+                    waiting++
+                } else {
+                    if ! p.Done {
+                        fmt.Print("\r")
+                        PrintSeparator("=")
+                        p.RenderBoard()
+                        p.ReceiveCommands()
+                    } else {
+                        fmt.Println("\nGoodbye!\n")
+                        return
+                    }
+                }
+            }
         }
     }
 }
 
 /** User Communication **/
+
+func PrintSeparator(char string) {
+    for i := 0 ; i < 80 ; i++ {
+        fmt.Print(char)
+    }
+    fmt.Print("\n")
+}
+
 
 func (p *Player) ReceiveCommands() {
     reader := bufio.NewReader(os.Stdin)
@@ -88,32 +157,41 @@ func (p *Player) ReceiveCommands() {
     var err error
     switch cmd {
     case "ready":
-        fmt.Println("Sending request to " + p.URL + "/ready")
         resp, _ := http.Get(p.URL + "/ready")
-        fmt.Println("Sent request to " + p.URL + "/ready")
         defer resp.Body.Close()
 
-        data := make(map[string]string)
+        data := make( map[string]interface{} )
         dec := json.NewDecoder(resp.Body)
         dec.Decode(&data)
-        fmt.Println( data["Message"] )
+        p.Messages <- data
+        p.Ready = true
 
     case "lake":
-        scard   = parts[1]
-        stocard = parts[2]
-        pile, pilenum, depth = p.GetCard( scard )
-        tocard, _ := strconv.Atoi( stocard )
-        if depth == 0 {
-            p.Transaction( pile, pilenum, "Lake", tocard, depth + 1 )
+        if len(parts) == 3 && p.Started {
+            scard   = parts[1]
+            stocard = parts[2]
+            pile, pilenum, depth = p.GetCard( scard )
+            tocard, _ := strconv.Atoi( stocard )
+            if tocard < len(p.Lake.Piles) {
+                if depth == 0 {
+                    p.Transaction( pile, pilenum, "Lake", tocard, depth + 1 )
+                }
+            }
+        } else {
+            fmt.Fprintf(os.Stderr,"usage: %v <card> <pile>\n", cmd)
         }
     case "move":
-        scard   = parts[1]
-        stocard = parts[2]
-        pile, pilenum, depth = p.GetCard( scard )
-        topile, topilenum, _ := p.GetCard( stocard )
-        err = p.Transaction( pile, pilenum, topile, topilenum, depth + 1 )
-        if err != nil {
-            fmt.Println(err)
+        if len(parts) == 3 && p.Started {
+            scard   = parts[1]
+            stocard = parts[2]
+            pile, pilenum, depth = p.GetCard( scard )
+            topile, topilenum, _ := p.GetCard( stocard )
+            err = p.Transaction( pile, pilenum, topile, topilenum, depth + 1 )
+            if err != nil {
+                fmt.Println(err)
+            }
+        } else {
+            fmt.Fprintf(os.Stderr,"usage: %v <from> <to>\n", cmd)
         }
     case "fish":
         for topile := range p.Hand.River {
@@ -136,13 +214,13 @@ func (p *Player) ReceiveCommands() {
         if err != nil {
             fmt.Println(err)
         }
-    case "quit":
-        jsonMsg := map[string]interface{}{
-            "Value" : p.Hand.Nertzpile.Len(),
-            "Nertz" : true,
+    case "nertz":
+        if p.Hand.Nertzpile.Len() == 0 && p.Started {
+            p.EndGame(false)
         }
-        websocket.JSON.Send(p.Conn, jsonMsg)
-        p.Done = true
+    case "quit":
+        p.EndGame(true)
+        time.Sleep(100 * time.Millisecond)
     case "help":
         fmt.Print("Your commands are these:\n  draw: reveals the next three cards in your stream\n  move <thiscardname> <thatcardname>: moves this card under that card. Both cards are assumed to be in your hand.\n    eg: move 4h 5s || move 9c Td || move Qc Kh\n  fish: fills an empty space in your river with the top card of your nertz pile\n  lake <thiscardname> <pilenumber>: moves this card from your hand to the specified pile in the lake\n    eg: lake As 1 ||  lake 2s 1 || lake 3s 1 || lake Ad 2\n")
     default:
@@ -158,7 +236,9 @@ func (p *Player) ReceiveCommands() {
  ****/
 
 func (p *Player) RenderBoard() {
+    fmt.Print("\n")
     p.Lake.Display()
+    fmt.Print("\n")
     p.Hand.Display()
 }
 
@@ -257,7 +337,11 @@ func (h *Hand) TakeFrom( pile string, pilenum int, numcards int ) *list.List {
         e = h.River[pilenum].Front()
     }
     for i := 0 ; i < numcards ; i++ {
-        cards.PushBack(e.Value)
+        if pile != "River" {
+            cards.PushFront(e.Value)
+        } else {
+            cards.PushBack(e.Value)
+        }
         e = e.Next()
     }
     return cards
@@ -284,6 +368,8 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List, url string) e
             if ! data["Ok"] {
                 return errors.New("Not a valid move or you were too slow!")
             }
+            // Wait for the new lake
+            time.Sleep(100 * time.Millisecond)
         }
     case "River":
         if h.River[pilenum].Len() == 0 {
