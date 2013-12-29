@@ -36,8 +36,8 @@ func (p *Player) ReceiveMessages() {
             } else {
                 //if this was a quit or gameover message stop looping
                 _, ok := val["Value"]
-                _, ook := val[p.Name]
-                if ok || ook {
+                _, over := val[p.Name]
+                if ok || over {
                     done = true
                 }
                 p.Messages <- val
@@ -49,7 +49,7 @@ func (p *Player) ReceiveMessages() {
 func (p *Player) EndGame(isQuitting bool) {
     if ! p.Done {
         jsonMsg := map[string]interface{}{
-            "Value" : p.Hand.Nertzpile.Len(),
+            "Value" : int(p.Hand.Nertzpile.Len()),
             "Nertz" : !isQuitting,
         }
         websocket.JSON.Send(p.Conn, jsonMsg)
@@ -67,7 +67,7 @@ func (p *Player) HandleMessages() {
             if ok {
                 switch contents.(string) {
                 case "Nertz":
-                    fmt.Printf("\n! Looks like the game is over !\n")
+                    fmt.Printf("\nLooks like the game is over !\n")
                     p.EndGame(false)
                 case "Let's Begin!":
                     fmt.Printf("\r\n-----------------------\n! Let the games begin !\n-----------------------\n")
@@ -94,7 +94,10 @@ func (p *Player) HandleMessages() {
                     fmt.Printf( "You quit with a score of %v.\nThanks for playing!", val )
                 } else {
                     if _, ok := msg[p.Name]; ok {
+                        fmt.Printf("\n")
                         DisplayScoreboard(msg)
+                        fmt.Println("\nGoodbye!\n")
+                        return
                     } else {
                         fmt.Println(msg)
                     }
@@ -123,10 +126,11 @@ func (p *Player) HandleMessages() {
                         fmt.Print("\r")
                         PrintSeparator("=")
                         p.RenderBoard()
-                        p.ReceiveCommands()
-                    } else {
-                        fmt.Println("\nGoodbye!\n")
-                        return
+                        isQuit := p.ReceiveCommands()
+                        if isQuit {
+                            fmt.Println("\nGoodbye!\n")
+                            return
+                        }
                     }
                 }
             }
@@ -144,7 +148,7 @@ func PrintSeparator(char string) {
 }
 
 
-func (p *Player) ReceiveCommands() {
+func (p *Player) ReceiveCommands() bool {
     reader := bufio.NewReader(os.Stdin)
 
     fmt.Print("Enter Command: ")
@@ -194,9 +198,14 @@ func (p *Player) ReceiveCommands() {
             fmt.Fprintf(os.Stderr,"usage: %v <from> <to>\n", cmd)
         }
     case "fish":
-        for topile := range p.Hand.River {
-            if p.Hand.River[topile].Len() == 0  {
-                p.Transaction( "Nertzpile", -1, "River", topile, 1 )
+        if p.Hand.Nertzpile.Len() == 0 && p.Started {
+            p.EndGame(false)
+            time.Sleep(100 * time.Millisecond)
+        } else {
+            for topile := range p.Hand.River {
+                if p.Hand.River[topile].Len() == 0  {
+                    p.Transaction( "Nertzpile", -1, "River", topile, 1 )
+                }
             }
         }
     case "draw":
@@ -215,18 +224,19 @@ func (p *Player) ReceiveCommands() {
             fmt.Println(err)
         }
     case "nertz":
-        if p.Hand.Nertzpile.Len() == 0 && p.Started {
-            p.EndGame(false)
-        }
+        p.EndGame(false)
+        time.Sleep(100 * time.Millisecond)
     case "quit":
         p.EndGame(true)
         time.Sleep(100 * time.Millisecond)
+        return true
     case "help":
         fmt.Print("Your commands are these:\n  draw: reveals the next three cards in your stream\n  move <thiscardname> <thatcardname>: moves this card under that card. Both cards are assumed to be in your hand.\n    eg: move 4h 5s || move 9c Td || move Qc Kh\n  fish: fills an empty space in your river with the top card of your nertz pile\n  lake <thiscardname> <pilenumber>: moves this card from your hand to the specified pile in the lake\n    eg: lake As 1 ||  lake 2s 1 || lake 3s 1 || lake Ad 2\n")
     default:
         fmt.Print("Not a valid command. Use `help` for more details.\n")
 
     }
+    return false
 }
 
 /**** Gameplay
@@ -245,10 +255,13 @@ func (p *Player) RenderBoard() {
 func (p *Player) GetCard( scard string ) ( string, int, int ) {
     h := p.Hand
     card := Cardify( scard, p.Name )
-    e := h.Nertzpile.Front()
-    if card == e.Value.(Card) {
-        println("Found in the nertz-pile...")
-        return "Nertzpile", 0, 0
+    var e *list.Element
+    if h.Nertzpile.Len() > 0 {
+        e = h.Nertzpile.Front()
+        if card == e.Value.(Card) {
+            println("Found in the nertz-pile...")
+            return "Nertzpile", 0, 0
+        }
     }
     if h.Stream.Len() > 0 {
         e = h.Stream.Front()

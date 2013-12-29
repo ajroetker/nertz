@@ -122,7 +122,9 @@ type Client struct {
     Conn *websocket.Conn
     Lakes chan Lake
     Messages chan string
+    TalliedUp chan int
     Name string
+    Done bool
 }
 
 type Game struct {
@@ -171,18 +173,49 @@ func (game *Game) Init(players int) {
     lake := NewLake(players)
     game.Lakes <- lake
     game.Updates <- lake
+    game.Scoreboard = map[string]int{}
+    for _, client := range game.Clients {
+        game.Scoreboard[client.Name] = 0
+    }
 }
 
 func DisplayScoreboard(scores map[string]interface{}) {
+    maxlength := 0
+    for key, _ := range scores {
+        if len(key) > maxlength {
+            maxlength = len(key)
+        }
+    }
+    for i := 0 ; i < maxlength*2 ; i++{
+        fmt.Printf( ":" )
+    }
+    fmt.Println("")
+    for i := 0 ; i < maxlength - len("Scoreboard")/2 ; i++{
+        fmt.Printf(" ")
+    }
+    fmt.Println("Scoreboard")
+    for i := 0 ; i < maxlength*2 ; i++{
+        fmt.Printf( "-" )
+    }
+    fmt.Println("")
     for key, val := range scores {
+        for i := 0 ; i < maxlength + 1 - len(key) ; i++{
+            fmt.Print(" ")
+        }
         fmt.Printf("%v = %v\n", key, val)
     }
+    for i := 0 ; i < maxlength*2 ; i++{
+        fmt.Printf( ":" )
+    }
+    fmt.Println("")
 }
 
 func (g *Game) NewClient(ws *websocket.Conn) *Client {
     var client *Client = new(Client)
     client.Conn = ws
+    client.Done = false
     client.Lakes = make(chan Lake, 10)
+    client.TalliedUp = make(chan int, 1)
     client.Messages = make(chan string, 10)
     g.NewClients <- client
     return client
