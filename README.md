@@ -51,7 +51,8 @@ type Move struct {
 
 ####Client  
 - `nertz-client` takes a `<host>` and `<port>` to connect to  
-- TODO game begins when a client sends message to server asking to begin and recieves the ok from the other clients  
+- Wait for other clients to connect to the server  
+- Once you're friends are connected type `ready` to block new clients from joining but wait for connected clients to `ready` as well
 - a sample client specification in the terminal in shown in the accompaning README.md  
 - the client can pickup linked lists of cards and move them to the other piles  
     * this implementation was chosen specifically to be extended easily to a GUI or browser  

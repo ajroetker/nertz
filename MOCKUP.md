@@ -11,12 +11,20 @@ help
   `lake <card> <pile>`: moves card from hand to the specified pile in the lake
     e.g.: lake As 1 | lake 2s 1 | lake 3s 1 | lake Ad 2
 
+nertz  
+    (use this when you and your friends are stuck and all want to quit)  
+quit  
+    (use this when your friends want to keep playing w/o you)  
+    Goodbye!  
+
 ready  
     (tell the server you are ready to play)
 
 draw  
     (self-explanatory)
 
+move qh e  
+     (moves Queen of Hearts onto empty spot in the river)
 move Qh Ks  
      (works)  
 move 4s Ks  
@@ -39,8 +47,6 @@ lake Ad 4
 lake Ac 4
      (works)
 
-quit
-     Error: quitters never win
 ```
 
 ##Examples
