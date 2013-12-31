@@ -63,21 +63,23 @@ type Move struct {
 There is a lot to do on the server side still, making it safe, printing error messages, closing connections and better engineering stuff.
 
 __Server__
-- [ ] Game Begin Interaction  
+- [x] Game Begin Interaction  
 - [x] Game Over Interaction  
 - [x] Quiting  
 - [x] Accept clients and broadcast messages  
 - [x] HTTP and Websocket Handlers  
 - [ ] Handling Multiple Games  
-- [ ] Handling variable numbers of clients  
+- [x] Handling variable numbers of clients  
+- [ ] Handling variable numbers of clients over 6  
+- [ ] Handling clients quitting before they are ready  
 - [ ] Database for Credentials/ High scores tracking
 
 __Client__
-- [ ] Display the Arena
+- [x] Display the Arena
 - [x] Display the Hand
-- [ ] Display the Messages
-- [ ] Client Nertz Code
-- [ ] Terminal display code (a nice implementation might resemble a [progress bar](http://www.darkcoding.net/software/pretty-command-line-console-output-on-unix-in-python-and-go-lang/ "A nice example of a GoLang progress bar")  
-- [ ] Credentials handling/Logging in  
+- [x] Display the Messages
+- [x] Client Nertz Code
+- [x] Terminal display code (a nice implementation might resemble a [progress bar](http://www.darkcoding.net/software/pretty-command-line-console-output-on-unix-in-python-and-go-lang/ "A nice example of a GoLang progress bar")  
+- [x] Credentials handling/Logging in  
 - [ ] Browser client which contacts Server
 - [ ] Browser display/Gui display  
