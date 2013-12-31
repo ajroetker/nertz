@@ -67,26 +67,29 @@ func (p *Player) HandleMessages() {
             if ok {
                 switch contents.(string) {
                 case "Nertz":
-                    fmt.Printf("\nLooks like the game is over !\n")
+                    fmt.Printf("\nLooks like the game is over!\n")
                     p.EndGame(false)
                 case "Let's Begin!":
-                    fmt.Printf("\r\n-----------------------\n! Let the games begin !\n-----------------------\n")
+                    PrintSeparator("-")
+                    userMessage := "Let the games begin"
+                    fmt.Printf("!!!                           %v                            !!!\n", userMessage)
+                    PrintSeparator("-")
                     p.Started = true
                 case "Already Started!":
-                    fmt.Printf("\r\n! The game already started !\n")
+                    fmt.Printf("The game already started and cannot join!\n")
                 case "Waiting on the other players...":
                     if ! p.Started {
                         fmt.Printf("%v\n", contents)
                     }
                 case "In Progress":
-                    fmt.Printf("\n! The game already started !\n")
+                    fmt.Printf("The game has already started silly!\n")
                 case "Credentials":
                     err := websocket.JSON.Send(p.Conn, Credentials{ p.Name, p.Password, })
                     if err != nil {
                         panic("JSON.Send: " + err.Error())
                     }
                 default:
-                    fmt.Printf("\n! %v !\n", contents)
+                    fmt.Printf("\n!!! %v !!!\n", contents)
                 }
             } else {
                 //display the scoreboard
@@ -105,7 +108,7 @@ func (p *Player) HandleMessages() {
             }
         default:
             if ! p.Done && ! p.Ready {
-                fmt.Print("\nLet the server know when you're ready....\n")
+                fmt.Print("Let the server know when you're ready.\n")
                 p.ReceiveCommands()
             } else {
                 if ! p.Started && ! p.Done {
@@ -118,7 +121,7 @@ func (p *Player) HandleMessages() {
                     }
                     s = s + "\r"
                     fmt.Print(s)
-                    waiting = ( waiting + 1 ) % 60
+                    waiting = ( waiting + 1 ) % 40
                     time.Sleep(100 * time.Millisecond)
                     waiting++
                 } else {
@@ -151,7 +154,11 @@ func PrintSeparator(char string) {
 func (p *Player) ReceiveCommands() bool {
     reader := bufio.NewReader(os.Stdin)
 
-    fmt.Print("Enter Command: ")
+    if p.Started {
+        fmt.Print("Enter Command: ")
+    } else {
+        fmt.Print("Type `ready` to begin or `quit`: ")
+    }
     var scard, stocard, pile string
     var depth, pilenum int
     cmd, _ := reader.ReadString('\n')
@@ -161,15 +168,16 @@ func (p *Player) ReceiveCommands() bool {
     var err error
     switch cmd {
     case "ready":
-        resp, _ := http.Get(p.URL + "/ready")
-        defer resp.Body.Close()
+        if ! p.Started {
+            resp, _ := http.Get(p.URL + "/ready")
+            defer resp.Body.Close()
 
-        data := make( map[string]interface{} )
-        dec := json.NewDecoder(resp.Body)
-        dec.Decode(&data)
-        p.Messages <- data
-        p.Ready = true
-
+            data := make( map[string]interface{} )
+            dec := json.NewDecoder(resp.Body)
+            dec.Decode(&data)
+            p.Messages <- data
+            p.Ready = true
+        }
     case "lake":
         if len(parts) == 3 && p.Started {
             scard   = parts[1]
@@ -189,8 +197,24 @@ func (p *Player) ReceiveCommands() bool {
             scard   = parts[1]
             stocard = parts[2]
             pile, pilenum, depth = p.GetCard( scard )
-            topile, topilenum, _ := p.GetCard( stocard )
-            err = p.Transaction( pile, pilenum, topile, topilenum, depth + 1 )
+            var topile string
+            var topilenum int
+            // e specifies an empty slot DOCME
+            if ! ( stocard == "e" || stocard == "E" ) {
+                topile, topilenum, _ = p.GetCard( stocard )
+            } else {
+                for pile := range p.Hand.River {
+                    if p.Hand.River[pile].Len() == 0 {
+                         topile = "River"
+                         topilenum = pile
+                    }
+                }
+            }
+            if topile == "" {
+                err = errors.New("No pile has that specificied card/slot.")
+            } else {
+                err = p.Transaction( pile, pilenum, topile, topilenum, depth + 1 )
+            }
             if err != nil {
                 fmt.Println(err)
             }
@@ -209,24 +233,32 @@ func (p *Player) ReceiveCommands() bool {
             }
         }
     case "draw":
-        drawlen := p.Hand.Streampile.Len()
-        switch {
-        case 0 == drawlen:
-            if streamlen := p.Hand.Stream.Len(); streamlen != 0 {
-                err = p.Transaction( "Stream", -1, "Streampile", -1, streamlen )
+        if p.Started {
+            drawlen := p.Hand.Streampile.Len()
+            switch {
+            case 0 == drawlen:
+                if streamlen := p.Hand.Stream.Len(); streamlen != 0 {
+                    err = p.Transaction( "Stream", -1, "Streampile", -1, streamlen )
+                }
+            case drawlen < 3:
+                err = p.Transaction( "Streampile", -1, "Stream", -1, drawlen )
+            default:
+                err = p.Transaction( "Streampile", -1, "Stream", -1, 3 )
             }
-        case drawlen < 3:
-            err = p.Transaction( "Streampile", -1, "Stream", -1, drawlen )
-        default:
-            err = p.Transaction( "Streampile", -1, "Stream", -1, 3 )
-        }
-        if err != nil {
-            fmt.Println(err)
+            if err != nil {
+                fmt.Println(err)
+            }
         }
     case "nertz":
-        p.EndGame(false)
-        time.Sleep(100 * time.Millisecond)
+        if p.Started {
+            p.EndGame(false)
+            time.Sleep(100 * time.Millisecond)
+        } else {
+            fmt.Printf("Can't call nertz when we haven't started.\n")
+        }
     case "quit":
+        // we want to be able to quit before we've started
+        // doesn't quite work properly atm
         p.EndGame(true)
         time.Sleep(100 * time.Millisecond)
         return true

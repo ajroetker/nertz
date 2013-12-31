@@ -134,6 +134,7 @@ func (g *Game) WaitForEnd(c *Client) {
     g.Done <- done + 1
     c.Done = true
     if scoreupdate["Nertz"].(bool) {
+        g.Over = true
         g.GameOver <- 1
     } else {
         //thanks for playing quitter!

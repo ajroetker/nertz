@@ -33,6 +33,20 @@ type Move struct{
 func (c Card) Stringify() string {
     var suit string
     var value string
+    // set to red
+    red := "\x1b\x5b\x33\x31\x6d"
+    // set to black
+    black := "\x1b\x5b\x33\x30\x6d"
+    // return to the default color
+    neutral := "\x1b\x5b\x33\x39\x6d"
+    // return background to default color
+    bwhite := "\x1b\x5b\x34\x37\x6d"
+    // return background to default color
+    bneutral := "\x1b\x5b\x34\x39\x6d"
+    spades := fmt.Sprintf("%v\xE2\x99\xA0%v", black, neutral)
+    hearts := fmt.Sprintf("%v\xE2\x99\xA5%v", red, neutral)
+    clubs := fmt.Sprintf("%v\xE2\x99\xA3%v", black, neutral)
+    diamonds := fmt.Sprintf("%v\xE2\x99\xA6%v", red, neutral)
     switch c.Value {
     case 1:
         value = "A"
@@ -47,17 +61,18 @@ func (c Card) Stringify() string {
     default:
         value = fmt.Sprintf("%v", c.Value)
     }
+    value = fmt.Sprintf("%v%v%v", black, value, neutral)
     switch c.Suit {
     case 1:
-        suit = "\xE2\x99\xA0"
+        suit = spades
     case 2:
-        suit = "\xE2\x99\xA5"
+        suit = hearts
     case 3:
-        suit = "\xE2\x99\xA3"
+        suit = clubs
     case 4:
-        suit = "\xE2\x99\xA6"
+        suit = diamonds
     }
-    return fmt.Sprintf("%v %v", value, suit)
+    return fmt.Sprintf("%v %v %v %v", bwhite, value, suit, bneutral)
 }
 
 func Cardify(s string, player string) Card {
@@ -70,6 +85,16 @@ func Cardify(s string, player string) Card {
         var suit int
         var value int
         switch svalue {
+        case "a":
+            value = 1
+        case "t":
+            value = 10
+        case "j":
+            value = 11
+        case "q":
+            value = 12
+        case "k":
+            value = 13
         case "A":
             value = 1
         case "T":
@@ -137,6 +162,7 @@ type Game struct {
     ReadyPlayers chan int
     Begin chan int
     Started bool
+    Over bool
     Done chan int
     Scoreboard map[string]int
 }
@@ -164,6 +190,7 @@ func NewGame() *Game {
     game.ReadyPlayers <- 0
     game.Begin        = make(chan int, 1)
     game.Started      = false
+    game.Over         = false
     game.Done         = make(chan int, 1)
     game.Done <- 0
     return game
@@ -229,11 +256,12 @@ func (l *Lake) Display() {
     for pile := range l.Piles {
         var toprint string
         if pileLen := len(l.Piles[pile].Cards) ; pileLen != 0 {
-            toprint = fmt.Sprintf(" %v ", l.Piles[pile].Cards[ pileLen - 1 ].Stringify())
+            toprint = fmt.Sprintf("%v", l.Piles[pile].Cards[ pileLen - 1 ].Stringify())
         } else {
             toprint = "     "
         }
         var spile string
+        // align spacing on number
         if pile < 10 {
             spile = fmt.Sprintf(" %v", pile)
         } else {
@@ -345,10 +373,10 @@ func NewPlayer(name string, pw string, url string, ws *websocket.Conn) *Player {
 /*** Display ***/
 
 func PrintCardStack(cs *list.List, toShow int) {
-    stack := "[ %v"
+    stack := "[%v"
     for e := cs.Front() ; e != nil ; e = e.Next() {
         if toShow > 0 {
-            card := fmt.Sprintf("%v ]%%v", e.Value.(Card).Stringify())
+            card := fmt.Sprintf("%v]%%v", e.Value.(Card).Stringify())
             stack = fmt.Sprintf(stack, card)
             toShow--
         } else {
@@ -356,7 +384,7 @@ func PrintCardStack(cs *list.List, toShow int) {
         }
     }
     stack = fmt.Sprintf(stack, "")
-    if stack == "[ " {
+    if stack == "[" {
        fmt.Println("")
     } else {
         fmt.Println(stack)

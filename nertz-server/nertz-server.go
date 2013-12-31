@@ -37,7 +37,7 @@ func MakeReadyHandler(g *nertz.Game) func(w http.ResponseWriter, r *http.Request
 func MakeMoveHandler(g *nertz.Game) func(w http.ResponseWriter, r *http.Request) {
     return func(w http.ResponseWriter, r *http.Request) {
         var resp = make(map[string]bool)
-        if g.Started {
+        if g.Started && ! g.Over {
             data := new(nertz.Move)
             dec := json.NewDecoder(r.Body)
             dec.Decode(&data)

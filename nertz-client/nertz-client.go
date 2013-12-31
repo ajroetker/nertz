@@ -18,10 +18,11 @@ func Credentials() (string, string) {
     fmt.Print("Enter Username: ")
     username, _ := reader.ReadString('\n')
 
-    fmt.Print("Enter Password: ")
-    password, _ := reader.ReadString('\n')
+    //fmt.Print("Enter Password: ")
+    //password, _ := reader.ReadString('\n')
 
-    return strings.TrimSpace(username), strings.TrimSpace(password) // ReadString() leaves a trailing newline character
+    //return strings.TrimSpace(username), strings.TrimSpace(password) // ReadString() leaves a trailing newline character
+    return strings.TrimSpace(username), ""
 }
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
     wsurl := fmt.Sprintf("ws://%v:%v/ws", host, port)
     url := fmt.Sprintf("http://%v:%v", host, port)
 
+    fmt.Fprintf(os.Stdout, "\nConnecting to the server at %v:%v...\n\n", host, port)
     ws, err := websocket.Dial(wsurl, "", origin)
     if err != nil {
         log.Fatal(err)
@@ -51,7 +53,6 @@ func main() {
     player := nertz.NewPlayer(name, password, url, ws)
 
     go player.ReceiveMessages()
-    fmt.Fprintf(os.Stdout, "\nConnecting to the server at %v:%v...\n\n", host, port)
     time.Sleep(1000 * time.Millisecond)
     player.HandleMessages()
 }
