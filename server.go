@@ -95,8 +95,12 @@ func (s *Game) MakeMove(move *Move) bool {
     size := len(a.Piles[move.Pile].Cards)
     var resp bool
     if size == 0 && move.Card.Value == 1 {
-        a.Piles[move.Pile].Cards = append( a.Piles[move.Pile].Cards, move.Card )
-        resp = true
+        if move.Card.Value == 1 {
+            a.Piles[move.Pile].Cards = append( a.Piles[move.Pile].Cards, move.Card )
+            resp = true
+        } else {
+            resp = false
+        }
     } else {
         top := a.Piles[move.Pile].Cards[size-1].Value
         suit := a.Piles[move.Pile].Cards[size-1].Suit

@@ -425,7 +425,13 @@ func (h *Hand) GiveTo( pile string, pilenum int, cards *list.List, url string) e
             if frontcard.Value == backcard.Value + 1 && ( frontcard.Suit + backcard.Suit ) % 2 != 0 {
                 h.River[pilenum].PushFrontList(cards)
             } else {
-                return errors.New("Not a valid move")
+                frontcard = cards.Front().Value.(Card)
+                backcard = h.River[pilenum].Back().Value.(Card)
+                if cards.Len() == 1 && frontcard == h.Nertzpile.Front().Value.(Card) && frontcard.Value == backcard.Value + 1 && ( frontcard.Suit + backcard.Suit ) % 2 != 0 {
+                    h.River[pilenum].PushBackList(cards)
+                } else {
+                    return errors.New("Not a valid move")
+                }
             }
         }
 
