@@ -37,7 +37,8 @@ func (p *Player) ReceiveMessages() {
                 //if this was a quit or gameover message stop looping
                 _, ok := val["Value"]
                 _, over := val[p.Name]
-                if ok || over {
+                started := val["Message"]
+                if ok || over || started == "Already Started!" {
                     done = true
                 }
                 p.Messages <- val
